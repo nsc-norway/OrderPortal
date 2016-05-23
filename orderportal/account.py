@@ -2,9 +2,9 @@
 
 from __future__ import print_function, absolute_import
 
-import collections
 import csv
 import logging
+from collections import OrderedDict as OD
 from cStringIO import StringIO
 
 import tornado.web
@@ -14,6 +14,7 @@ from orderportal import constants
 from orderportal import saver
 from orderportal import settings
 from orderportal import utils
+from orderportal.order import OrderApiV1Mixin
 from orderportal.group import GroupSaver
 from orderportal.message import MessageSaver
 from orderportal.requesthandler import RequestHandler
@@ -24,7 +25,7 @@ class AccountSaver(saver.Saver):
 
     def set_email(self, email):
         assert self.get('email') is None # Email must not have been set.
-        email = email.lower().strip()
+        email = email.strip().lower()
         if not email: raise ValueError('No email given.')
         if not constants.EMAIL_RX.match(email):
             raise ValueError('Malformed email value.')
@@ -157,6 +158,11 @@ class AccountsApiV1(_AccountsFilter):
         accounts = self.get_accounts()
         items = []
         for account in accounts:
+            item = OD()
+            item['email'] = account['email']
+            item['links'] = dict(
+                api=dict(href=self.reverse_url('account_api',account['email'])),
+                display=dict(href=self.reverse_url('account',account['email'])))
             name = last_name = account.get('last_name')
             first_name = account.get('first_name')
             if name:
@@ -164,44 +170,41 @@ class AccountsApiV1(_AccountsFilter):
                     name += ', ' + first_name
             else:
                 name = first_name
-            # XXX OrderedDict
-            items.append(
-                dict(email=account['email'],
-                     name=name,
-                     first_name=first_name,
-                     last_name=last_name,
-                     pi=bool(account.get('pi')),
-                     gender=account.get('gender'),
-                     university=account['university'],
-                     role=account['role'],
-                     status=dict(
-                        name=account['status'],
-                        image=dict(href=self.static_url(account['status']+'.png'))),
-                     login=account.get('login', '-'),
-                     modified=account['modified'],
-                     orders=dict(
-                        count=account['order_count'],
-                        links=dict(
-                            display=dict(
-                                href=self.reverse_url('account_orders',
-                                                      account['email'])),
-                            api=dict(
-                                href=self.reverse_url('account_orders_api',
-                                                      account['email'])))),
-                     links=dict(
-                        api=dict(href=self.reverse_url('account_api', account['email'])),
-                        display=dict(href=self.reverse_url('account', account['email'])))
-                     ))
-        # XXX OrderedDict
-        self.write(dict(items=items,
-                        doctype='accounts',
-                        base=self.absolute_reverse_url('home'),
-                        links=dict(
-                    self=dict(
-                        href=self.reverse_url('accounts_api', **self.params)),
+            item['name'] = name
+            item['first_name'] = first_name
+            item['last_name'] = last_name
+            item['pi'] = bool(account.get('pi'))
+            item['gender'] = account.get('gender')
+            item['university'] = account.get('university')
+            item['role'] = account['role']
+            item['status'] = dict(
+                name=account['status'],
+                image=dict(href=self.static_url(account['status']+'.png')))
+            item['address'] = account.get('address') or {}
+            item['invoice_ref'] = account.get('invoice_ref')
+            item['invoice_address'] = account.get('invoice_address') or {}
+            item['login'] = account.get('login', '-')
+            item['modified'] = account['modified']
+            item['orders'] = dict(
+                count=account['order_count'],
+                links=dict(
                     display=dict(
-                        href=self.reverse_url('accounts', **self.params))
-                        )))
+                        href=self.reverse_url('account_orders',
+                                              account['email'])),
+                    api=dict(
+                        href=self.reverse_url('account_orders_api',
+                                              account['email']))))
+            items.append(item)
+        data = OD()
+        data['base'] = self.absolute_reverse_url('home')
+        data['type'] = 'accounts'
+        data['links'] = links = OD()
+        links['self'] = dict(
+            href=self.absolute_reverse_url('accounts_api', **self.params))
+        links['display'] = dict(
+            href=self.absolute_reverse_url('accounts', **self.params))
+        data['items'] = items
+        self.write(data)
 
 
 class AccountsCsv(_AccountsFilter):
@@ -295,13 +298,12 @@ class Account(AccountMixin, RequestHandler):
 
     @tornado.web.authenticated
     def get(self, email):
-        email = email.lower().strip()
         account = self.get_account(email)
         self.check_readable(account)
-        account['order_count'] = self.get_account_order_count(email)
+        account['order_count'] = self.get_account_order_count(account['email'])
         view = self.db.view('log/account',
-                            startkey=[email, constants.CEILING],
-                            lastkey=[email],
+                            startkey=[account['email'], constants.CEILING],
+                            lastkey=[account['email']],
                             descending=True,
                             limit=1)
         try:
@@ -314,7 +316,7 @@ class Account(AccountMixin, RequestHandler):
             invitations = []
         self.render('account.html',
                     account=account,
-                    groups=self.get_account_groups(email),
+                    groups=self.get_account_groups(account['email']),
                     latest_activity=latest_activity,
                     invitations=invitations,
                     is_deletable=self.is_deletable(account))
@@ -330,7 +332,6 @@ class Account(AccountMixin, RequestHandler):
     @tornado.web.authenticated
     def delete(self, email):
         "Delete a account that is pending; to get rid of spam application."
-        email = email.lower().strip()
         account = self.get_account(email)
         self.check_admin()
         if not self.is_deletable(account):
@@ -338,7 +339,7 @@ class Account(AccountMixin, RequestHandler):
         # Delete the groups this account owns.
         view = self.db.view('group/owner',
                             include_docs=True,
-                            key=email)
+                            key=account['email'])
         for row in view:
             group = row.doc
             self.delete_logs(group['_id'])
@@ -346,19 +347,19 @@ class Account(AccountMixin, RequestHandler):
         # Remove this account from groups it is a member of.
         view = self.db.view('group/owner',
                             include_docs=True,
-                            key=email)
+                            key=account['email'])
         for row in view:
             group = row.doc
             with GroupSaver(doc=row, rqh=self) as saver:
                 members = set(group['members'])
-                members.discard(email)
+                members.discard(account['email'])
                 saver['members'] = sorted(members)
         # Delete the messages of the account.
         view = self.db.view('message/recipient',
                             reduce=False,
                             include_docs=True,
-                            startkey=[email],
-                            endkey=[email, constants.CEILING])
+                            startkey=[account['email']],
+                            endkey=[account['email'], constants.CEILING])
         for row in view:
             message = row.doc
             self.delete_logs(message['_id'])
@@ -382,9 +383,12 @@ class AccountApiV1(AccountMixin, RequestHandler):
 
     @tornado.web.authenticated
     def get(self, email):
-        email = email.lower().strip()
         account = self.get_account(email)
         self.check_readable(account)
+        data = OD()
+        data['base'] = self.absolute_reverse_url('home')
+        data['type'] = 'account'
+        data['email'] = account['email']
         name = last_name = account.get('last_name')
         first_name = account.get('first_name')
         if name:
@@ -392,42 +396,38 @@ class AccountApiV1(AccountMixin, RequestHandler):
                 name += ', ' + first_name
         else:
             name = first_name
-        order_count = self.get_account_order_count(email)
+        data['links'] = dict(
+            self=dict(href=self.reverse_url('account_api', account['email'])),
+            display=dict(href=self.reverse_url('account', account['email'])))
+        data['name'] = name
+        data['first_name'] = first_name
+        data['last_name'] = last_name
+        data['pi'] = bool(account.get('pi'))
+        data['university'] = account['university']
+        data['role'] = account['role']
+        data['gender'] = account.get('gender')
+        data['status'] = account['status']
+        data['address'] = account.get('address') or {}
+        data['invoice_ref'] = account.get('invoice_ref')
+        data['invoice_address'] = account.get('invoice_address') or {}
+        data['login'] = account.get('login', '-')
+        data['modified'] = account['modified']
         view = self.db.view('log/account',
-                            startkey=[email, constants.CEILING],
-                            lastkey=[email],
+                            startkey=[account['email'], constants.CEILING],
+                            lastkey=[account['email']],
                             descending=True,
                             limit=1)
         try:
-            latest_activity = list(view)[0].key[1]
+            data['latest_activity'] = list(view)[0].key[1]
         except IndexError:
-            latest_activity = None
-        # XXX OrderedDict
-        self.write(dict(
-                base=self.absolute_reverse_url('home'),
-                email=account['email'],
-                name=name,
-                first_name=account['first_name'],
-                last_name=account['last_name'],
-                pi=bool(account.get('pi')),
-                university=account['university'],
-                role=account['role'],
-                gender=account.get('gender'),
-                status=account['status'],
-                login=account.get('login', '-'),
-                modified=account['modified'],
-                orders=dict(
-                    count=order_count,
-                    display=dict(href=self.reverse_url('account_orders',
-                                                       account['email'])),
-                    api=dict(href=self.reverse_url('account_orders_api',
-                                                   account['email']))),
-                links=dict(
-                    self=dict(href=self.reverse_url('account_api',
-                                                    account['email'])),
-                    display=dict(href=self.reverse_url('account',
-                                                       account['email'])))
-                ))
+            data['latest_activity'] = None
+        data['orders'] = dict(
+            count=self.get_account_order_count(account['email']),
+            display=dict(
+                href=self.reverse_url('account_orders', account['email'])),
+            api=dict(
+                href=self.reverse_url('account_orders_api', account['email'])))
+        self.write(data)
 
 
 class AccountOrdersMixin(object):
@@ -451,7 +451,6 @@ class AccountOrders(AccountOrdersMixin, RequestHandler):
 
     @tornado.web.authenticated
     def get(self, email):
-        email = email.lower().strip()
         account = self.get_account(email)
         self.check_readable(account)
         if self.is_staff():
@@ -462,68 +461,39 @@ class AccountOrders(AccountOrdersMixin, RequestHandler):
             len(settings['ORDERS_LIST_FIELDS'])
         self.render('account_orders.html',
                     order_column=order_column,
-                    account=account)
+                    account=account,
+                    any_groups=bool(self.get_account_groups(account['email'])))
 
 
-class AccountOrdersApiV1(AccountOrdersMixin, RequestHandler):
+class AccountOrdersApiV1(AccountOrdersMixin,
+                         OrderApiV1Mixin,
+                         RequestHandler):
     "Account orders API; JSON output."
 
     @tornado.web.authenticated
     def get(self, email):
         "JSON output."
-        email = email.lower().strip()
         account = self.get_account(email)
         self.check_readable(account)
+        # Get names and forms lookups
+        names = self.get_account_names()
+        forms = dict([(f[1], f[0]) for f in self.get_forms(enabled=False)])
+        data = OD()
+        data['base'] = self.absolute_reverse_url('home')
+        data['type'] = 'account orders'
+        data['links'] = dict(
+            self=dict(
+                href=self.reverse_url('account_orders_api', account['email'])),
+            display=dict(
+                href=self.reverse_url('account_orders', account['email'])))
         view = self.db.view('order/owner',
                             reduce=False,
                             include_docs=True,
-                            startkey=[email],
-                            endkey=[email, constants.CEILING])
-        orders = [r.doc for r in view]
-        names = self.get_account_names(None)
-        # Forms lookup on iuid
-        forms = dict([(f[1], f[0]) for f in self.get_forms(enabled=False)])
-        items = []
-        for order in orders:
-            identifier = order.get('identifier')
-            if not identifier:
-                identifier = order['_id'][:6] + '...'
-            item = collections.OrderedDict()
-            item['iuid'] = order['_id']
-            item['identifier'] = identifier
-            item['title'] = order.get('title') or '[no title]'
-            item['links'] = dict(
-                self=dict(href=self.reverse_url('order_api', order['_id'])),
-                display=dict(href=self.order_reverse_url(order)))
-            item['form'] = dict(
-                title=forms[order['form']],
-                display=dict(href=self.reverse_url('form', order['form'])))
-            item['owner'] = dict(
-                name=names[order['owner']],
-                display=dict(href=self.reverse_url('account', order['owner'])))
-            item['fields'] = {}
-            item['status'] = dict(
-                name=order['status'],
-                display=dict(
-                    href=self.reverse_url('site', order['status']+'.png')))
-            item['history'] = {}
-            item['modified'] = order['modified']
-            for f in settings['ORDERS_LIST_FIELDS']:
-                item['fields'][f['identifier']] = order['fields'].get(f['identifier'])
-            for s in settings['ORDERS_LIST_STATUSES']:
-                item['history'][s] = order['history'].get(s)
-            items.append(item)
-        # XXX OrderedDict
-        self.write(dict(items=items,
-                        type='account orders',
-                        base=self.absolute_reverse_url('home'),
-                        links=dict(
-                    self=dict(
-                        href=self.reverse_url('account_orders_api',
-                                              account['email'])),
-                    display=dict(
-                        href=self.reverse_url('account_orders',
-                                              account['email'])))))
+                            startkey=[account['email']],
+                            endkey=[account['email'], constants.CEILING])
+        data['items'] = [self.get_json(r.doc, names=names, forms=forms)
+                         for r in view]
+        self.write(data)
 
 
 class AccountGroupsOrders(AccountOrdersMixin, RequestHandler):
@@ -531,7 +501,6 @@ class AccountGroupsOrders(AccountOrdersMixin, RequestHandler):
 
     @tornado.web.authenticated
     def get(self, email):
-        email = email.lower().strip()
         account = self.get_account(email)
         self.check_readable(account)
         if self.is_staff():
@@ -545,60 +514,38 @@ class AccountGroupsOrders(AccountOrdersMixin, RequestHandler):
                     account=account)
 
 
-class AccountGroupsOrdersApiV1(AccountOrdersMixin, RequestHandler):
+class AccountGroupsOrdersApiV1(AccountOrdersMixin, 
+                               OrderApiV1Mixin,
+                               RequestHandler):
     "Account group orders API; JSON output."
 
     @tornado.web.authenticated
     def get(self, email):
         "JSON output."
-        email = email.lower().strip()
         account = self.get_account(email)
         self.check_readable(account)
         orders = []
-        for colleague in self.get_account_colleagues(email):
+        for colleague in self.get_account_colleagues(account['email']):
             view = self.db.view('order/owner',
                                 reduce=False,
                                 include_docs=True,
                                 startkey=[colleague],
                                 endkey=[colleague, constants.CEILING])
             orders.extend([r.doc for r in view])
-        names = self.get_account_names(None)
-        # Forms lookup on iuid
+        # Get names and forms lookups
+        names = self.get_account_names()
         forms = dict([(f[1], f[0]) for f in self.get_forms(enabled=False)])
-        items = []
-        for order in orders:
-            # XXX OrderedDict
-            item = dict(title=order.get('title') or '[no title]',
-                        form_title=forms[order['form']],
-                        form_href=self.reverse_url('form', order['form']),
-                        owner_name=names[order['owner']],
-                        owner_href=self.reverse_url('account', order['owner']),
-                        fields={},
-                        status=order['status'],
-                        status_href=self.reverse_url('site', order['status'] + '.png'),
-                        history={},
-                        modified=order['modified'])
-            item['href'] = self.order_reverse_url(order)
-            identifier = order.get('identifier')
-            if not identifier:
-                identifier = order['_id'][:6] + '...'
-            item['identifier'] = identifier
-            for f in settings['ORDERS_LIST_FIELDS']:
-                item['fields'][f['identifier']] = order['fields'].get(f['identifier'])
-            for s in settings['ORDERS_LIST_STATUSES']:
-                item['history'][s] = order['history'].get(s)
-            items.append(item)
-        # XXX OrderedDict
-        self.write(dict(items=items,
-                        doctype='account groups orders',
-                        base=self.absolute_reverse_url('home'),
-                        links=dict(
-                    self=dict(
-                        href=self.reverse_url('account_groups_orders_api',
-                                              account['email'])),
-                    display=dict(
-                        href=self.reverse_url('account_groups_orders',
-                                              account['email'])))))
+        data = OD()
+        data['base'] = self.absolute_reverse_url('home')
+        data['type'] = 'account groups orders'
+        data['links'] = dict(
+            self=dict(
+                href=self.reverse_url('account_orders_api', account['email'])),
+            display=dict(
+                href=self.reverse_url('account_orders', account['email'])))
+        data['items'] = [self.get_json(o, names=names, forms=forms)
+                         for o in orders]
+        self.write(data)
 
 
 class AccountLogs(AccountMixin, RequestHandler):
@@ -606,7 +553,6 @@ class AccountLogs(AccountMixin, RequestHandler):
 
     @tornado.web.authenticated
     def get(self, email):
-        email = email.lower().strip()
         account = self.get_account(email)
         self.check_readable(account)
         self.render('logs.html',
@@ -620,7 +566,6 @@ class AccountMessages(AccountMixin, RequestHandler):
     @tornado.web.authenticated
     def get(self, email):
         "Show list of messages sent to the account given by email address."
-        email = email.lower().strip()
         account = self.get_account(email)
         self.check_readable(account)
         view = self.db.view('message/recipient',
@@ -647,14 +592,12 @@ class AccountEdit(AccountMixin, RequestHandler):
 
     @tornado.web.authenticated
     def get(self, email):
-        email = email.lower().strip()
         account = self.get_account(email)
         self.check_editable(account)
         self.render('account_edit.html', account=account)
 
     @tornado.web.authenticated
     def post(self, email):
-        email = email.lower().strip()
         account = self.get_account(email)
         self.check_editable(account)
         with AccountSaver(doc=account, rqh=self) as saver:
@@ -699,7 +642,7 @@ class AccountEdit(AccountMixin, RequestHandler):
             if utils.to_bool(self.get_argument('api_key', default=False)):
                 saver['api_key'] = utils.get_iuid()
             saver['update_info'] = False
-        self.see_other('account', email)
+        self.see_other('account', account['email'])
 
 
 class Login(RequestHandler):
@@ -874,7 +817,7 @@ class Register(RequestHandler):
                     if not university:
                         university = self.get_argument('university',
                                                        default=None)
-                        saver['university'] = university or None
+                    saver['university'] = university or None
                 except tornado.web.MissingArgumentError, msg:
                     raise ValueError(msg)
                 saver['department'] = self.get_argument('department', None)
@@ -904,7 +847,7 @@ class Register(RequestHandler):
                 if not saver['invoice_address'].get('address'):
                     saver['invoice_address'] = saver['address'].copy()
                 saver['phone'] = self.get_argument('phone', default=None)
-                saver['owner'] = email
+                saver['owner'] = saver['email']
                 saver['role'] = constants.USER
                 saver['status'] = constants.PENDING
                 saver.erase_password()
@@ -961,7 +904,7 @@ class AccountEnable(RequestHandler):
                     code=account['code'])
                 saver.set_template(template)
                 saver['recipients'] = [account['email']]
-        self.see_other('account', email)
+        self.see_other('account', account['email'])
 
 
 class AccountDisable(RequestHandler):
@@ -974,7 +917,7 @@ class AccountDisable(RequestHandler):
         with AccountSaver(account, rqh=self) as saver:
             saver['status'] = constants.DISABLED
             saver.erase_password()
-        self.see_other('account', email)
+        self.see_other('account', account['email'])
 
 
 class AccountUpdateInfo(RequestHandler):
@@ -987,4 +930,4 @@ class AccountUpdateInfo(RequestHandler):
         if not account.get('update_info'):
             with AccountSaver(account, rqh=self) as saver:
                 saver['update_info'] = True
-        self.see_other('account', email)
+        self.see_other('account', account['email'])
