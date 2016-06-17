@@ -24,8 +24,8 @@ class OrderSaver(saver.Saver):
 
     def set_identifier(self, form):
         """Set the order identifier if format defined.
-        Only if form is enabled; not when testing."""
-        if form['status'] != constants.ENABLED: return
+        Allow also for disabled, since admin may clone such orders."""
+        if form['status'] not in (constants.ENABLED, constants.DISABLED): return
         try:
             fmt = settings['ORDER_IDENTIFIER_FORMAT']
         except KeyError:    # No identifier; sequential counter not used
@@ -214,24 +214,35 @@ class OrderMixin(object):
         return [settings['ORDER_STATUSES_LOOKUP'][t] for t in result]
 
     def is_clonable(self, order):
-        "Can the given order be cloned? Its form must be enabled."
+        """Can the given order be cloned? Its form must be enabled.
+        Special case: Admin can clone an order even if its form is disabled.
+        """
         if not self.global_modes['allow_order_creation']: return False
         form = self.get_entity(order['form'], doctype=constants.FORM)
-        return form['status'] in (constants.ENABLED, constants.TESTING)
+        if self.is_admin():
+            return form['status'] in (constants.ENABLED,
+                                      constants.TESTING,
+                                      constants.DISABLED)
+        else:
+            return form['status'] in (constants.ENABLED, constants.TESTING)
 
     def prepare_message(self, order):
-        "Prepare a message to send after status change."
+        """Prepare a message to send after status change.
+        It is sent later by cron job script 'script/messenger.py'
+        """
         try:
             template = settings['ORDER_MESSAGES'][order['status']]
         except KeyError:
             return
-        owner = self.get_account(order['owner'])
-        # Owner account may have disappeared; not very likely...
+        try:
+            owner = self.get_account(order['owner'])
+        except ValueError:
+            # Owner account may have been deleted.
+            owner = None
+            recipients = set()
         if owner and 'owner' in template['recipients']:
             recipients = set([owner['email']])
-        else:
-            recipients = set()
-        if 'group' in template['recipients']:
+        if owner and 'group' in template['recipients']:
             recipients.update([a['email']
                                for a in self.get_colleagues(owner['email'])])
         if 'admin' in template['recipients']:
@@ -416,6 +427,9 @@ class Order(OrderMixin, RequestHandler):
             if not match: raise KeyError
         except KeyError:
             order = self.get_entity(iuid, doctype=constants.ORDER)
+            if order.get('identifier'):
+                self.see_other('order', order.get('identifier'))
+                return
         else:
             order = self.get_entity_view('order/identifier', match.group())
         try:
@@ -526,7 +540,7 @@ class OrderCreate(RequestHandler):
             saver['fields'] = dict([(f['identifier'], None) for f in fields])
             saver['history'] = {}
             saver.set_status(settings['ORDER_STATUS_INITIAL']['identifier'])
-            for target, source in settings['ORDER_AUTOPOPULATE'].iteritems():
+            for target, source in settings.get('ORDER_AUTOPOPULATE', {}).iteritems():
                 if target not in fields: continue
                 try:
                     key1, key2 = source.split('.')
@@ -590,7 +604,9 @@ class OrderEdit(OrderMixin, RequestHandler):
                 saver.update_fields(Fields(form))
             flag = self.get_argument('__save__', None)
             if flag == 'continue':
-                self.see_other('order_edit', order['_id'])
+                self.see_other('order_edit',
+                               order['_id'],
+                               message='Order saved.')
             elif flag == 'submit': # XXX Hard-wired, currently
                 targets = self.get_targets(order)
                 for target in targets:

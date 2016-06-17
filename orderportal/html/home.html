@@ -68,7 +68,7 @@
 	    <input type="password" class="form-control" name="password">
 	  </div>
 	  <div class="form-group"> 
-	    <button type="submit" class="btn btn-default">
+	    <button type="submit" class="btn btn-info btn-block">
 	      <span class="glyphicon glyphicon-log-in"></span>
 	      Login
 	    </button>
@@ -80,8 +80,8 @@
       <div class="panel-body">
 	<div>
 	  {% if global_modes['allow_registration'] %}
-	  <a href="{{ reverse_url('register') }}"
-	     class="btn btn-success" role="button">
+	  <a href="{{ reverse_url('register') }}" role="button"
+	     class="btn btn-success btn-block">
 	    <span class="glyphicon glyphicon-user"></span>
 	    Register account
 	  </a>
@@ -94,14 +94,16 @@
 	</div>
 	<br>
 	<div>
-	  <a href="{{ reverse_url('reset') }}" role="button" class="btn btn-warning">
+	  <a href="{{ reverse_url('reset') }}" ole="button"
+	     class="btn btn-warning btn-block">
 	    <span class="glyphicon glyphicon-step-backward"></span>
 	    Reset password
 	  </a>
 	</div>
 	<br>
 	<div>
-	  <a href="{{ reverse_url('password') }}" role="button" class="btn btn-danger">
+	  <a href="{{ reverse_url('password') }}" role="button"
+	     class="btn btn-danger btn-block">
 	    <span class="glyphicon glyphicon-lock"></span>
 	    Set password
 	  </a>
@@ -309,7 +311,7 @@
 	    <label for="news_text_edit_{{ pos }}">Text</label>
 	    <textarea class="form-control" rows="4"
 		      name="text" id="news_text_edit_{{ pos }}"
-		      >{% raw news.get('text') or '' %}</textarea>
+		      >{{ news.get('text') or '' }}</textarea>
 	    <span class="help-block">
 	      Text for the news item, which will be formatted using
 	      <a href="{{ settings['MARKDOWN_URL'] }}" target="_blank">Markdown</a>.
@@ -406,7 +408,7 @@
 		       for="event_text_edit_{{ pos }}">Text</label>
 		<textarea class="form-control" rows="4"
 			  name="text" id="event_text_edit_{{ pos }}"
-			  >{% raw event.get('text') or '' %}</textarea>
+			  >{{ event.get('text') or '' }}</textarea>
 	      </div>
 	    </div>
 	    <span class="help-block">
@@ -587,7 +589,8 @@
 <div class="row">
   <div class="col-md-12">
     <div class="well well-sm">
-      This site is based on the OrderPortal software, which is Open Source.
+      This site is based on the <b>OrderPortal version {{ version }}</b>,
+      which is Open Source software.
       Technical information and links can be found
       <a href="{{ reverse_url('techinfo') }}">here</a>.
     </div>
