@@ -86,9 +86,9 @@ class OrderSaver(saver.Saver):
         select_id = field.get('visible_if_field')
         if select_id:
             select_value = self.doc['fields'].get(select_id)
+            if select_value: select_value = select_value.lower()
             if_value = field.get('visible_if_value')
             if if_value: if_value = if_value.lower()
-            if if_value not in ['true', 'false'] and select_value: select_value = select_value.lower()
             if select_value != if_value: return True
 
         if field['type'] == constants.GROUP:
