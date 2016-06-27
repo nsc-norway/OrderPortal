@@ -494,6 +494,16 @@ class OrderApiV1(ApiV1Mixin, OrderApiV1Mixin, Order):
                              item=data)
         data['fields'] = order['fields']
         data['invalid'] = order['invalid']
+        files = []
+        if self.is_attachable(order):
+            for filename in order.get('_attachments', []):
+                stub = order['_attachments'][filename]
+                files.append(dict(filename=filename,
+                                  size=stub['length'],
+                                  content_type=stub['content_type']))
+                files.sort(lambda i,j: cmp(i['filename'].lower(),
+                                           j['filename'].lower()))
+        data['files'] = files
         self.write(data)
 
 
