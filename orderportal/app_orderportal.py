@@ -5,11 +5,23 @@ from __future__ import print_function, absolute_import
 
 import logging
 import os
+import sys
 
 import tornado.web
 import tornado.ioloop
 
-import orderportal
+# Assist setup debugging
+try:
+    import orderportal
+except ImportError:
+    print('executable', sys.executable)
+    print('version', sys.version)
+    print('PYTHONPATH', os.getenv('PYTHONPATH'))
+    print('path:')
+    for p in sys.path:
+        print('  ', p)
+    raise
+
 from orderportal import constants
 from orderportal import settings
 from orderportal import utils
@@ -140,8 +152,9 @@ def get_handlers():
     urls.append(url(r'/.*', NoSuchEntity))
     return urls
 
-def main():
+def main(pidfile=None):
     logging.info("OrderPortal version %s", orderportal.__version__)
+    logging.info("settings from %s", settings['SETTINGS_FILEPATH'])
     if settings['TORNADO_DEBUG']:
         logging.info('tornado debug')
     if settings['LOGGING_DEBUG']:
@@ -159,7 +172,11 @@ def main():
     for key, value in settings['ORDER_STATUSES_LOOKUP'].iteritems():
         value['href'] = application.reverse_url('site', key + '.png')
     application.listen(settings['PORT'], xheaders=True)
-    logging.info("web server PID %s on port %s", os.getpid(), settings['PORT'])
+    pid = os.getpid()
+    logging.info("web server PID %s on port %s", pid, settings['PORT'])
+    if pidfile:
+        with open(pidfile, 'w') as pf:
+            pf.write(str(pid))
     tornado.ioloop.IOLoop.instance().start()
 
 
@@ -168,4 +185,4 @@ if __name__ == "__main__":
     (options, args) = parser.parse_args()
     utils.load_settings(filepath=options.settings,
                         verbose=options.verbose)
-    main()
+    main(options.pidfile)
