@@ -178,10 +178,18 @@
 	<th>IUID</th>
 	<td>{{ order['_id'] }}</td>
       </tr>
-      
+
       <tr>
 	<th>Samples</th>
-	<td>No samples</td>
+	<td>No samples
+    {% if is_editable %}
+    <button type="button" class="btn btn-primary"
+      data-toggle="modal" data-target="#attach">
+      <span class="glyphicon glyphicon-paperclip"></span>
+      Attach
+    </button>
+    {% end %}
+  </td>
       </tr>
 
       <tr>

@@ -18,16 +18,6 @@
 
 {% if is_editable %}
 <p>
-  <form action="{{ reverse_url('order_edit', order['_id']) }}"
-	role="form"
-	method="GET">
-    <button type="submit" class="btn btn-lg btn-primary btn-block">
-      <span class="glyphicon glyphicon-edit"></span>
-      Edit
-    </button>
-  </form>
-</p>
-<p>
   <form action="{{ reverse_url('order', order['_id']) }}"
 	role="form"
 	method="POST">
@@ -47,32 +37,6 @@
   </div>
 </p>
 {% end %} {# if is_editable #}
-
-{% if is_clonable %}
-<p>
-  <form action="{{ reverse_url('order_clone', order['_id']) }}"
-	role="form"
-	method="POST">
-    {% module xsrf_form_html() %}
-    <button type="submit" class="btn btn-primary btn-block">
-      <span class="glyphicon glyphicon-plus-sign"></span>
-      Clone
-    </button>
-  </form>
-</p>
-{% elif not global_modes['allow_order_creation'] %}
-<p>
-  <div class="well text-danger">
-    Order creation is currently disabled.
-  </div>
-</p>
-{% else %}
-<p>
-  <div class="well">
-    This order cannot be cloned.
-  </div>
-<p>
-{% end %} {# if is_clonable #}
 
 <br>
 <br>
