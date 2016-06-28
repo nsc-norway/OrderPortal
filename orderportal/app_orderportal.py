@@ -40,6 +40,8 @@ from orderportal.file import *
 from orderportal.event import *
 from orderportal.search import *
 
+from orderportal.nsc_sample_table import *
+
 
 class Dummy(RequestHandler):
     def get(self, *args, **kwargs):
@@ -66,6 +68,7 @@ def get_handlers():
         url(r'/order/([0-9a-f]{32})/clone', OrderClone, name='order_clone'),
         url(r'/order/([0-9a-f]{32})/file', OrderAttach, name='order_attach'),
         url(r'/order/([0-9a-f]{32})/file/([^/]+)', OrderFile,name='order_file'),
+        url(r'/order/([0-9a-f]{32})/samples', OrderSamples,name='nsc_order_samples'),
         url(r'/orders', Orders, name='orders'),
         url(r'/api/v1/orders', OrdersApiV1, name='orders_api'),
         url(r'/accounts', Accounts, name='accounts'),
