@@ -183,11 +183,7 @@
 	<th>Samples</th>
 	<td>No samples
     {% if is_editable %}
-    <button type="button" class="btn btn-primary"
-      data-toggle="modal" data-target="#attach">
-      <span class="glyphicon glyphicon-paperclip"></span>
-      Attach
-    </button>
+    <div><a href="{{ reverse_url('nsc_order_samples', order['_id']) }}">View/edit sample information...</a> TODO!</div>
     {% end %}
   </td>
       </tr>
