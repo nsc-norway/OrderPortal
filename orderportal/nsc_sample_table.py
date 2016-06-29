@@ -23,6 +23,7 @@ from orderportal.requesthandler import RequestHandler, ApiV1Mixin
 from orderportal.order import OrderMixin
 
 
+
 class OrderSamples(OrderMixin, RequestHandler):
     "Sample list page."
 
@@ -44,6 +45,12 @@ class OrderSamples(OrderMixin, RequestHandler):
             self.see_other('home', error=str(msg))
             return
 
+        samples = order.get("samples")
+        if samples:
+            xx
+        else:
+            table = None
+
         self.render('nsc_sample_table.html',
                     title=u"Samples for order '{0}'".format(order['title']),
                     order=order,
@@ -51,6 +58,7 @@ class OrderSamples(OrderMixin, RequestHandler):
                     status=self.get_order_status(order),
                     is_editable=self.is_admin() or self.is_editable(order),
                     messages=["test"],
+                    table=table,
                     valid=False)
 
     @tornado.web.authenticated

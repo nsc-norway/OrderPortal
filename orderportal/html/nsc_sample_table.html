@@ -51,18 +51,25 @@
 {% block main_content %}
 <div class="panel panel-default">
   <div class="panel-body">
+
+  <p>To enter sample information:
+    <ul>
+      <li>Download the
+    <a href="https://portal.sequencing.uio.no/file/Sample%20table/download">sample table template</a></li>
+    <li>Fill in information about your samples and save it</li>
+    <li>Upload it in the form below</li>
+    <li>Verify the output and click Save on the right</li>
+  </ul>
+  </p>
+
+
   {% if valid %}
   <p>
     Please confirm that the sample information has been imported correctly, by inspecting the table below.
-    If there is an error, please contact us at <a href="mailto:post@sequencing.uio.no">post@sequencing.uio.no</a>.
+    If there is an error, contact us at <a href="mailto:post@sequencing.uio.no">post@sequencing.uio.no</a>.
   </p>
   {% else %}
   <p>
-    <ul>
-    {% for message in messages %}
-    <li>Test</li>
-    {% end %}
-    </ul>
   </p>
 
   <form action="{{ reverse_url('order_attach', order['_id']) }}"
@@ -71,7 +78,7 @@
         method="POST">
     {% module xsrf_form_html() %}
     <div class="form-group">
-      <label for="file">File</label>
+      <label for="file">Sample table (Spreadsheet)</label>
       <input type="file" name="file" class="form-control">
       <span class="help-block">
         The sample table to upload.
@@ -82,10 +89,23 @@
       <label class="control-label"></label>
       <button type="submit" class="btn btn-success">
         <span class="glyphicon glyphicon-floppy-disk"></span>
-        Save
+        Upload
       </button>
     </div>
   </form>
+
+  <h3>Sample information</h3>
+  {% if table %}
+  <table>
+    <tr><td>Test</td></tr>
+  </table>
+  {% else %}
+    <ul>
+    {% for message in messages %}
+    <li>Test</li>
+    {% end %}
+    </ul>
+  {% end %}
 
   {% end %}
   </div>
