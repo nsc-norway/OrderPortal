@@ -25,21 +25,15 @@ from orderportal.order import OrderMixin
 
 from orderportal import nsc_transporter
 
-def get_columns():
-    cols = []
-    for field_id, label, kind in nsc_transporter.SAMPLE_FIELDS:
-        col = {}
-        col['id'] = field_id
-        col['name'] = label
-        col['field'] = field_id
-        cols.append(col)
-    return cols
+class RedirectException(Exception):
+    """Signals to the caller that a redirect has been
+    triggered, so it should abort and return ASAP."""
+    pass
 
 class OrderSamples(OrderMixin, RequestHandler):
     "Sample list page."
 
-    @tornado.web.authenticated
-    def get(self, iuid):
+    def get_order(self, iuid):
         try:
             match = re.match(settings['ORDER_IDENTIFIER_REGEXP'], iuid)
             if not match: raise KeyError
@@ -47,13 +41,21 @@ class OrderSamples(OrderMixin, RequestHandler):
             order = self.get_entity(iuid, doctype=constants.ORDER)
             if order.get('identifier'):
                 self.see_other('order', order.get('identifier'))
-                return
+                raise RedirectException()
         else:
             order = self.get_entity_view('order/identifier', match.group())
         try:
             self.check_readable(order)
         except ValueError, msg:
             self.see_other('home', error=str(msg))
+            raise RedirectException()
+
+
+    @tornado.web.authenticated
+    def get(self, iuid):
+        try:
+            order = self.get_order(iuid)
+        except RedirectException:
             return
 
         samples = order.get("samples")
@@ -62,35 +64,36 @@ class OrderSamples(OrderMixin, RequestHandler):
         else:
             table = None
 
-        self.render('nsc_sample_table.html',
-                    title=u"Samples for order '{0}'".format(order['title']),
-                    order=order,
-                    account_names=self.get_account_names([order['owner']]),
-                    status=self.get_order_status(order),
-                    is_editable=self.is_admin() or self.is_editable(order),
-                    messages=["test"],
-                    table=table,
-                    valid=False,
-                    columns=json.dumps(get_columns()),
-                    rows=[])
+        self.prepare_page(order)
 
 
     @tornado.web.authenticated
     def post(self, iuid):
-        if self.get_argument('_http_method', None) == 'delete':
-            self.delete(iuid)
+        try:
+            order = self.get_order(iuid)
+        except RedirectException:
             return
-        raise tornado.web.HTTPError(
-            405, reason='internal problem; POST only allowed for DELETE')
-
-    @tornado.web.authenticated
-    def delete(self, iuid):
-        order = self.get_entity(iuid, doctype=constants.ORDER)
         try:
             self.check_editable(order)
         except ValueError, msg:
             self.see_other('home', error=str(msg))
-            return
-        self.delete_logs(order['_id'])
-        self.db.delete(order)
-        self.see_other('orders')
+
+
+    def prepare_page(self, order, messages=[], samples=None):
+
+        if samples:
+            validation_table, sample_list = nsc_transporter.validate_table(samples)
+        else if order.has_key('samples'):
+            validation_table, sample_list = nsc_transporter.validate_table(order['samples'])
+        else:
+            validation_table = sample_list = []
+
+        self.render('nsc_sample_table.html',
+                    title=u"Samples for order '{0}'".format(order['title']),
+                    order=order,
+                    is_editable=self.is_admin() or self.is_editable(order),
+                    messages=messages,
+                    table=table,
+                    valid=validation_table and all(c.valid for c in r for r in validation_table),
+                    columns=[f[1] for f in nsc_transporter.SAMPLE_FIELDS]
+                    )

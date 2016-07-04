@@ -91,28 +91,47 @@ def import_file(fh):
     return samples
 
 
+class Cell(object):
+
+    def __init__(self, valid, value, message):
+        self.valid = valid
+        self.value = value
+        self.message = message
+
+
 def validate_table(samples_raw):
     """Main sample table validation.
 
-    Return value:
-        (validation, table)
+    Takes a preliminary grid, from either file import or direct user import.
+    Input format: list of dict objects, each dict object representing one
+    sample, containing the sample field names as keys, and values as values.
 
-    validation: A list of tuples, one for each sample:
-        validation = [
-            ({'sample_name': ..., ...}, error_level, 'Validation message')
-        ]
-    The first element contains the
+    Returns:
+        (validation_table, sample_list)
 
+    validation_table: A list containing feedback to the user. Contains a
+    list of lists of Cell objects. The first dimension is the row, nested
+    dimension is the column.
 
+    sample_list: list similar to samples_raw, but only contains valid data
+    (input cells which fail validation are not included). All data in
+    sample_list have the specified data types.
     """
 
-    notes = []
-    samples = []
+    validation_table = []
+    sample_list = []
     for sample_raw in samples_raw:
-        note = {}
         sample = {}
+        row = []
         for key,_,fn in SAMPLE_FIELDS:
+            value = sample_raw[key]
             try:
-                sample[k] = fn(sample_raw[key])
+                value = fn(value)
+                sample[key] = value
+                row.append(Cell(True, str(value), None))
             except ValidationError, e:
-                note[k] = (sample_raw[k], e)
+                row.append(Cell(False, str(value), str(e)))
+        sample_list.append(sample)
+        validation_table.append(row)
+
+    return (validation_table, sample_list)

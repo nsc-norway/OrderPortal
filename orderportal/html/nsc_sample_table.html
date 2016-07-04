@@ -7,7 +7,7 @@
 
 {% block header_css %}
 <link rel="stylesheet" href="{{ static_url('slick/slick.grid.css') }}">
-
+<link rel="stylesheet" href="{{ static_url('nsc_style.css') }}">
 {% end %}
 
 {% block body_header_meta %}
@@ -97,23 +97,46 @@
     </div>
   </form>
 
+  {% end %}{# else if not valid #}
   <h3>Sample information</h3>
-  <div id="sample_table" style="width: 100%; height: 400px;"></div>
 
-  {% end %}
+  <table>
+    <tr>
+      {% for col in columns %}
+      <th>
+        {{ col }}
+      </th>
+      {% end %}
+    </tr>
+    {% for row in rows %}
+    <tr>
+      {% for cell in row %}
+      <td {{ 'class="validation_error"' if not cell.valid else '' }}>
+        {{ cell.value }}
+        {% if not cell.valid %}
+        <hr><div class="error_message">{{ cell.message }}</div>
+        {% end %}
+      </td>
+      {% end %}
+    </tr>
+    {% end %}
+  </table>
+  <form>
+  <h5>Enter new samples directly:</h5>
+  <table>
+    <tr>
+      {% for col in columns %}
+      <th>
+        {{ col }}
+      </th>
+      {% end %}
+    </tr>
+  </table>
+  <button type="submit" class="btn btn-success">
+    <span class="glyphicon glyphicon-plus"></span>
+    Add
+  </button>
+  </form>
   </div>
 </div>
 {% end %} {# block main_content #}
-
-{% block javascript_code %}
-<script src="{{ static_url('jquery.event.drag-2.2.js') }}"></script>
-<script src="{{ static_url('slick/slick.core.js') }}"></script>
-<script src="{{ static_url('slick/slick.grid.js') }}"></script>
-
-<script>
-var columns = {% raw columns %};
-var data = {% raw rows %};
-var options = {};
-var grid = new Slick.Grid("#sample_table", data, columns, options);
-</script>
-{% end %}
