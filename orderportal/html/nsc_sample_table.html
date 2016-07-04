@@ -5,6 +5,11 @@
 
 {% extends "base.html" %}
 
+{% block header_css %}
+<link rel="stylesheet" href="{{ static_url('slick/slick.grid.css') }}">
+
+{% end %}
+
 {% block body_header_meta %}
 <a href="{{ reverse_url('order_api', order['_id']) }}">
   {% module Icon('json') %} JSON
@@ -12,7 +17,6 @@
 {% end %}
 
 {% block meta_content %}
-
 <p>
   <form action="{{ reverse_url('order', order['_id']) }}"
 	role="form"	method="GET">
@@ -51,7 +55,6 @@
 {% block main_content %}
 <div class="panel panel-default">
   <div class="panel-body">
-
   <p>To enter sample information:
     <ul>
       <li>Download the
@@ -95,22 +98,22 @@
   </form>
 
   <h3>Sample information</h3>
-  {% if table %}
-  <table>
-    <tr><td>Test</td></tr>
-  </table>
-  {% else %}
-    <ul>
-    {% for message in messages %}
-    <li>Test</li>
-    {% end %}
-    </ul>
-  {% end %}
+  <div id="sample_table" style="width: 100%; height: 400px;"></div>
 
   {% end %}
   </div>
 </div>
-
-
-
 {% end %} {# block main_content #}
+
+{% block javascript_code %}
+<script src="{{ static_url('jquery.event.drag-2.2.js') }}"></script>
+<script src="{{ static_url('slick/slick.core.js') }}"></script>
+<script src="{{ static_url('slick/slick.grid.js') }}"></script>
+
+<script>
+var columns = {% raw columns %};
+var data = {% raw rows %};
+var options = {};
+var grid = new Slick.Grid("#sample_table", data, columns, options);
+</script>
+{% end %}

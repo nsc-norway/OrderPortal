@@ -7,6 +7,7 @@ from __future__ import print_function, absolute_import
 import logging
 import re
 import urlparse
+import json
 from collections import OrderedDict as OD
 from cStringIO import StringIO
 
@@ -22,7 +23,17 @@ from orderportal.requesthandler import RequestHandler, ApiV1Mixin
 
 from orderportal.order import OrderMixin
 
+from orderportal import nsc_transporter
 
+def get_columns():
+    cols = []
+    for field_id, label, kind in nsc_transporter.SAMPLE_FIELDS:
+        col = {}
+        col['id'] = field_id
+        col['name'] = label
+        col['field'] = field_id
+        cols.append(col)
+    return cols
 
 class OrderSamples(OrderMixin, RequestHandler):
     "Sample list page."
@@ -59,7 +70,10 @@ class OrderSamples(OrderMixin, RequestHandler):
                     is_editable=self.is_admin() or self.is_editable(order),
                     messages=["test"],
                     table=table,
-                    valid=False)
+                    valid=False,
+                    columns=json.dumps(get_columns()),
+                    rows=[])
+
 
     @tornado.web.authenticated
     def post(self, iuid):

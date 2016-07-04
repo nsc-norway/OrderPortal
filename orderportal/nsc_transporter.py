@@ -3,11 +3,22 @@ import itertools
 def any_val(v):
     return v
 
-def int_val(v):
+def int_req(v):
     return i
 
-def str_val(v):
+def str_req(v):
     return ""
+
+def float_req(v):
+    return 0.0
+
+def float_opt(v):
+    return 0.0
+
+def str_opt(v):
+    return 0.0
+
+
 
 
 # First element: Internal label
@@ -36,8 +47,8 @@ def import_file(fh):
     """Simple importer which reads the sample table Excel file and
     produces a list of dicts, one for each sample (identical to the
     format stored in the DB and exported to the LIMS, etc.)
-    
-    Only minimal validation is done. On error, an ImportException 
+
+    Only minimal validation is done. On error, an ImportException
     is raised, with a message indicating the cause.
     """
     try:
@@ -70,7 +81,7 @@ def import_file(fh):
                 sample[key] = ws.cell(row=i, column=col_of[key]).value
         else:
             break
-        
+
     if ws.cell(row=i+1, column=1).value:
         raise ImportException("We only support importing {0} samples. Please "+
                 "contact NSC staff if you would like to submit more samples, "+
@@ -84,22 +95,16 @@ def validate_table(samples_raw):
     """Main sample table validation.
 
     Return value:
-        If all fields are valid, it returns
-            (table, None)
-        The table includes the converted values of each cell, 
-        according to the conversion functions defined in the
-        SAMPLE_FIELDS array.
+        (validation, table)
 
-        If there are any validation errors, it returns a list
-        notes as the second element of the tuple:
-            (table, notes)
-        Any validated value has a corresponding entry in table.
-        However, if an entry does not pass validation, it 
-        instead has a tuple in notes, containing the raw 
-        (unconverted) value and a validation message.
+    validation: A list of tuples, one for each sample:
+        validation = [
+            ({'sample_name': ..., ...}, error_level, 'Validation message')
+        ]
+    The first element contains the
+
 
     """
-
 
     notes = []
     samples = []
@@ -111,9 +116,3 @@ def validate_table(samples_raw):
                 sample[k] = fn(sample_raw[key])
             except ValidationError, e:
                 note[k] = (sample_raw[k], e)
-
-
-
-
-
-
