@@ -18,24 +18,28 @@ def float_opt(v):
 def str_opt(v):
     return 0.0
 
+class Field(object):
+    def __init__(self, id, label, validator, width):
+        self.id = id
+        self.label = label
+        self.validator = validator
+        self.width = width
 
-
-
-# First element: Internal label
-# Second element: Header in Excel sheet
+# First arg:  Internal label
+# Second arg: Header in spreadsheet / CSV / table
 SAMPLE_FIELDS = [
-        ("sample_number",       "Number",           int_req),
-        ("plate",               "Plate",            any_val),
-        ("sample_name",         "Sample name",      str_req),
-        ("conc",                "Conc.",            float_req),
-        ("a_260_280",           "A260/280",         float_opt),
-        ("a_260_230",           "A260/230",         float_opt),
-        ("volume",              "Volume provided",  float_opt),
-        ("total_dna_rna",       "Total DNA / RNA",  float_opt),
-        ("index_name",          "Index name",       str_opt),
-        ("index_seq",           "Index Seq",        str_opt),
-        ("primers",             "Primers, Linkers or RE", str_opt),
-        ("num_reads",            "Approx no. Reads", str_opt)
+        Field("sample_number",       "Number",           int_req,       4),
+        Field("plate",               "Plate",            any_val,       4),
+        Field("sample_name",         "Sample name",      str_req,       10),
+        Field("conc",                "Conc.",            float_req,     4),
+        Field("a_260_280",           "A260/280",         float_opt,     4),
+        Field("a_260_230",           "A260/230",         float_opt,     4),
+        Field("volume",              "Volume provided",  float_opt,     4),
+        Field("total_dna_rna",       "Total DNA / RNA",  float_opt,     4),
+        Field("index_name",          "Index name",       str_opt,       8),
+        Field("index_seq",           "Index Seq",        str_opt,       15),
+        Field("primers",             "Primers, Linkers or RE", str_opt, 10),
+        Field("num_reads",           "Approx no. Reads", str_opt,       8)
         ]
 
 
@@ -55,7 +59,7 @@ def import_file(fh):
         wb = load_workbook(fh)
     except Exception as e:
         raise ImportException("Failed to import the Excel file. Please use a " +
-        "file in Microsoft Excel format (xlsx). (Error: " + str() + ")")
+        "file in Microsoft Excel format (xlsx). (Error: " + str(e) + ")")
 
     try:
         ws = wb.worksheets[0]
@@ -67,9 +71,9 @@ def import_file(fh):
     for i in range(20):
         val = ws.cell(row=1, column=i).value
         if val:
-            for key, label, _ in SAMPLE_FIELDS:
-                if str(val).lower().startswith(label.lower()):
-                    col_of[key] = i
+            for field in SAMPLE_FIELDS:
+                if str(val).lower().startswith(field.label.lower()):
+                    col_of[field.id] = i
 
     MAX_SAMP = 16000
     samples = []
@@ -77,8 +81,8 @@ def import_file(fh):
         name = ws.cell(row=i, column=col_of['sample_name'])
         if name:
             sample = {}
-            for key, _, _ in SAMPLE_FIELDS:
-                sample[key] = ws.cell(row=i, column=col_of[key]).value
+            for field in SAMPLE_FIELDS:
+                sample[key] = ws.cell(row=i, column=col_of[field.id]).value
         else:
             break
 
@@ -123,11 +127,11 @@ def validate_table(samples_raw):
     for sample_raw in samples_raw:
         sample = {}
         row = []
-        for key,_,fn in SAMPLE_FIELDS:
-            value = sample_raw[key]
+        for field in SAMPLE_FIELDS:
+            value = sample_raw[field.id]
             try:
-                value = fn(value)
-                sample[key] = value
+                value = field.validator(value)
+                sample[field.id] = value
                 row.append(Cell(True, str(value), None))
             except ValidationError, e:
                 row.append(Cell(False, str(value), str(e)))

@@ -1,8 +1,44 @@
-td.validation_error {
+div.upload-box {
+	width: 30em;
+	float: left;
+}
+
+div.upload-btn-box {
+	width: 10em;
+	float: left;
+	margin: 1.5em;
+	margin-top: auto;
+}
+
+div.the-grid {
+	overflow-x: scroll;
+	height: auto;
+	margin-bottom: 1em;
+}
+
+table.sample-list {
+	table-layout: fixed;
+}
+
+table.sample-list th {
+	padding-left: 0.2em;
+	padding-right: 0.2em;
+	text-align: center;
+}
+
+table.sample-list td {
+	text-align: center;
+}
+
+table.sample-list td.input {
+	padding: 0.2em;
+}
+
+table.sample-list td.validation-error {
 	background-color: rgba(255, 0, 0, 0.1);
 }
 
-div.error_message {
+div.error-message {
 	font-size: 0.8em;
 	color: red;
 }

@@ -49,6 +49,7 @@ class OrderSamples(OrderMixin, RequestHandler):
         except ValueError, msg:
             self.see_other('home', error=str(msg))
             raise RedirectException()
+        return order
 
 
     @tornado.web.authenticated
@@ -60,7 +61,7 @@ class OrderSamples(OrderMixin, RequestHandler):
 
         samples = order.get("samples")
         if samples:
-            xx
+            xxx
         else:
             table = None
 
@@ -68,7 +69,7 @@ class OrderSamples(OrderMixin, RequestHandler):
 
 
     @tornado.web.authenticated
-    def post(self, iuid):
+    def post(self, iuid, **kwargs):
         try:
             order = self.get_order(iuid)
         except RedirectException:
@@ -78,12 +79,20 @@ class OrderSamples(OrderMixin, RequestHandler):
         except ValueError, msg:
             self.see_other('home', error=str(msg))
 
+        if kwargs.get('sample_name'):
+            add_sample('')
+        try:
+            infile = self.request.files['file'][0]
+        except (KeyError, IndexError):
+            pass
+
+        self.prepare_page(order)
+
 
     def prepare_page(self, order, messages=[], samples=None):
-
         if samples:
             validation_table, sample_list = nsc_transporter.validate_table(samples)
-        else if order.has_key('samples'):
+        elif order.has_key('samples'):
             validation_table, sample_list = nsc_transporter.validate_table(order['samples'])
         else:
             validation_table = sample_list = []
@@ -93,7 +102,7 @@ class OrderSamples(OrderMixin, RequestHandler):
                     order=order,
                     is_editable=self.is_admin() or self.is_editable(order),
                     messages=messages,
-                    table=table,
+                    table=validation_table,
                     valid=validation_table and all(c.valid for c in r for r in validation_table),
-                    columns=[f[1] for f in nsc_transporter.SAMPLE_FIELDS]
+                    columns=nsc_transporter.SAMPLE_FIELDS
                     )
