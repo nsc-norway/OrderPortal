@@ -99,6 +99,16 @@
   </form>
   <div style="clear: both;"></div>
 
+  {% if messages %}
+  <h3>Errors</h3>
+  <p>Please correct the following problems:</p>
+  <ul>
+    {% for message in messages %}
+    <li class="form-error">{{ message }}</li>
+    {% end %}
+  </ul>
+  {% end %}{# if messages #}
+
   <h3>Sample information ({{ len(table) }} samples)</h3>
   <form action="{{ reverse_url('nsc_order_samples', order['_id']) }}"
         fole="form"
@@ -151,6 +161,10 @@
   <button name="save" type="submit"  class="btn btn-success">
     <span class="glyphicon glyphicon-save"></span>
     Save
+  </button>
+  <button name="clear" type="submit"  class="btn btn-success">
+    <span class="glyphicon glyphicon-save"></span>
+    Clear
   </button>
   </form>
   </div>

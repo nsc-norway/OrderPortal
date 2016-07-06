@@ -42,3 +42,7 @@ div.error-message {
 	font-size: 0.8em;
 	color: red;
 }
+
+.form-error {
+	color: red;
+}

@@ -98,26 +98,32 @@ class OrderSamples(OrderMixin, RequestHandler):
         except (KeyError, IndexError):
             data = self.get_samples_from_post()
 
-        print( args, kwargs )
+        if self.get_argument('clear', False):
+            pass
+        else:
+
+            if self.get_argument('add-sample', False):
+                sample_data = dict(
+                        (f.id, kwargs.get(f.id, ''))
+                        for f in nsc_transporter.SAMPLE_FIELDS
+                    )
+                data.append(sample_data)
+
+            validation_table, sample_list = nsc_transporter.validate_table(samples)
+
+
         # Determine which button was used
         if kwargs.has_key('submit'):
             print ("hello from submitQ")
         elif kwargs.has_key('save'):
             print ("hello from save()")
         elif kwargs.has_key('add-sample'):
-            sample_data = dict(
-                    (f.id, kwargs.get(f.id, ''))
-                    for f in nsc_transporter.SAMPLE_FIELDS
-                )
-            data.append(sample_data)
             self.prepare_page(order, data)
         else:
             self.prepare_page(order, [])
 
 
-    def prepare_page(self, order, samples, messages=[]):
-        validation_table, sample_list = nsc_transporter.validate_table(samples)
-
+    def prepare_page(self, order, validation_table, sample_list, messages=[]):
         self.render('nsc_sample_table.html',
                     title=u"Samples for order '{0}'".format(order['title']),
                     order=order,
