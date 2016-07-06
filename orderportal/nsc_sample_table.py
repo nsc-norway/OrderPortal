@@ -51,6 +51,19 @@ class OrderSamples(OrderMixin, RequestHandler):
             raise RedirectException()
         return order
 
+    def get_samples_from_post(self, request_args):
+        samples = {}
+        for i in range(nsc_transporter.MAX_SAMPLES):
+            sample = dict(
+                (field, self.get_argument(str(i) + '_' + field.id, ''))
+                for field in nsc_transporter.SAMPLE_FIELDS
+            )
+            if any(sample.values()):
+                samples.append(sample)
+            else:
+                break
+        return samples
+
 
     @tornado.web.authenticated
     def get(self, iuid):
@@ -65,11 +78,11 @@ class OrderSamples(OrderMixin, RequestHandler):
         else:
             table = None
 
-        self.prepare_page(order)
+        self.prepare_page(order, order.get('samples', []))
 
 
     @tornado.web.authenticated
-    def post(self, iuid, **kwargs):
+    def post(self, iuid):
         try:
             order = self.get_order(iuid)
         except RedirectException:
@@ -79,23 +92,31 @@ class OrderSamples(OrderMixin, RequestHandler):
         except ValueError, msg:
             self.see_other('home', error=str(msg))
 
-        if kwargs.get('sample_name'):
-            add_sample('')
         try:
             infile = self.request.files['file'][0]
+            data = nsc_transporter.import_file(infile)
         except (KeyError, IndexError):
-            pass
+            data = self.get_samples_from_post()
 
-        self.prepare_page(order)
-
-
-    def prepare_page(self, order, messages=[], samples=None):
-        if samples:
-            validation_table, sample_list = nsc_transporter.validate_table(samples)
-        elif order.has_key('samples'):
-            validation_table, sample_list = nsc_transporter.validate_table(order['samples'])
+        print( args, kwargs )
+        # Determine which button was used
+        if kwargs.has_key('submit'):
+            print ("hello from submitQ")
+        elif kwargs.has_key('save'):
+            print ("hello from save()")
+        elif kwargs.has_key('add-sample'):
+            sample_data = dict(
+                    (f.id, kwargs.get(f.id, ''))
+                    for f in nsc_transporter.SAMPLE_FIELDS
+                )
+            data.append(sample_data)
+            self.prepare_page(order, data)
         else:
-            validation_table = sample_list = []
+            self.prepare_page(order, [])
+
+
+    def prepare_page(self, order, samples, messages=[]):
+        validation_table, sample_list = nsc_transporter.validate_table(samples)
 
         self.render('nsc_sample_table.html',
                     title=u"Samples for order '{0}'".format(order['title']),

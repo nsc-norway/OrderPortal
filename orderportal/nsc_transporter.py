@@ -42,6 +42,7 @@ SAMPLE_FIELDS = [
         Field("num_reads",           "Approx no. Reads", str_opt,       8)
         ]
 
+MAX_SAMPLES = 16000
 
 class ImportException(Exception):
     pass
@@ -75,9 +76,8 @@ def import_file(fh):
                 if str(val).lower().startswith(field.label.lower()):
                     col_of[field.id] = i
 
-    MAX_SAMP = 16000
     samples = []
-    for i in range(3, MAX_SAMP):
+    for i in range(3, MAX_SAMPLES):
         name = ws.cell(row=i, column=col_of['sample_name'])
         if name:
             sample = {}
@@ -89,15 +89,15 @@ def import_file(fh):
     if ws.cell(row=i+1, column=1).value:
         raise ImportException("We only support importing {0} samples. Please "+
                 "contact NSC staff if you would like to submit more samples, "+
-                "and the webmaster "+
-                "may be able to increase this limit (MAX_SAMP).".format(MAX_SAMP))
+                "and the webmaster may be able to increase this limit "+
+                "(MAX_SAMPLES).".format(MAX_SAMPLES))
 
     return samples
 
 
 class Cell(object):
-
-    def __init__(self, valid, value, message):
+    def __init__(self, field, valid, value, message):
+        self.field = field
         self.valid = valid
         self.value = value
         self.message = message
@@ -128,13 +128,13 @@ def validate_table(samples_raw):
         sample = {}
         row = []
         for field in SAMPLE_FIELDS:
-            value = sample_raw[field.id]
+            value = sample_raw.get(field.id, '')
             try:
                 value = field.validator(value)
                 sample[field.id] = value
-                row.append(Cell(True, str(value), None))
+                row.append(Cell(field, True, str(value), None))
             except ValidationError, e:
-                row.append(Cell(False, str(value), str(e)))
+                row.append(Cell(field, False, str(value), str(e)))
         sample_list.append(sample)
         validation_table.append(row)
 

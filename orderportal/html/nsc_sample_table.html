@@ -32,12 +32,12 @@
 
 <p>
   {% if valid %}
-  <form action="{{ reverse_url('order_transition', order['_id'], target['identifier']) }}"
-	role="form"
-	method="POST">
+  <form action="{{ reverse_url('order', order['_id']) }}"
+    	role="form"
+    	method="POST">
     {% module xsrf_form_html() %}
     <p>
-      <button type="submit" class="btn btn-lg btn-success btn-block">
+      <button type="submit" name="submit" class="btn btn-lg btn-success btn-block">
         <span class="glyphicon glyphicon-trash"></span>
         Save
       </button>
@@ -100,12 +100,12 @@
   <div style="clear: both;"></div>
 
   <h3>Sample information ({{ len(table) }} samples)</h3>
-  <div class="the-grid">
   <form action="{{ reverse_url('nsc_order_samples', order['_id']) }}"
         fole="form"
-        enctype="multipart/form-data"
         method="POST">
+  <div class="the-grid">
   {% module xsrf_form_html() %}
+
   <table class="sample-list">
     <tr>
       {% for col in columns %}
@@ -115,11 +115,12 @@
       {% end %}
       <th></th>
     </tr>
-    {% for row in table %}
+    {% for i_row, row in enumerate(table) %}
     <tr>
       {% for cell in row %}
       <td {{ 'class="validation-error"' if not cell.valid else '' }}>
-        {{ cell.value }}
+        <input type="text" name="{{ cell.id + str(i_row) }}"
+                size="{{ cell.width }}" value="{{ cell.value }}">
         {% if not cell.valid %}
         <hr><div class="error-message">{{ cell.message }}</div>
         {% end %}
@@ -139,15 +140,19 @@
       {% end %}
       {% end %}
       <td class="input">
-        <button type="submit" class="btn btn-success">
+        <button type="submit" class="btn btn-success" name="add-sample">
           <span class="glyphicon glyphicon-plus"></span>
           Add
         </button>
       </td>
     </tr>
   </table>
-  </form>
   </div>
+  <button name="save" type="submit"  class="btn btn-success">
+    <span class="glyphicon glyphicon-save"></span>
+    Save
+  </button>
+  </form>
   </div>
 </div>
 {% end %} {# block main_content #}
