@@ -1,22 +1,33 @@
 import itertools
 
-def any_val(v):
-    return v
+
+class ValidationError(Exception):
+    """Used internally for validation functions"""
+    pass
 
 def int_req(v):
-    return i
+    if isinstance(v, int) or str(v).isdigit():
+        return int(v)
+    else:
+        raise ValidationError("Enter a number")
+
+def int_opt(v):
+    return "" if v == "" else int_opt(v)
 
 def str_req(v):
-    return ""
+    if v is None or v == "": raise ValidationError("Enter a value")
+    return str(v)
+
+str_opt = str
 
 def float_req(v):
-    return 0.0
+    try:
+        return float(str(v).replace(",","."))
+    except ValueError:
+        raise ValidationError("Enter a decimal number")
 
 def float_opt(v):
-    return 0.0
-
-def str_opt(v):
-    return 0.0
+    return "" if v == "" else float_req(v)
 
 class Field(object):
     def __init__(self, id, label, validator, width):
@@ -28,8 +39,8 @@ class Field(object):
 # First arg:  Internal label
 # Second arg: Header in spreadsheet / CSV / table
 SAMPLE_FIELDS = [
-        Field("sample_number",       "Number",           int_req,       4),
-        Field("plate",               "Plate",            any_val,       4),
+#        Field("sample_number",       "Number",           int_req,       4),
+        Field("plate",               "Plate",            str_opt,       4),
         Field("sample_name",         "Sample name",      str_req,       10),
         Field("conc",                "Conc.",            float_req,     4),
         Field("a_260_280",           "A260/280",         float_opt,     4),
@@ -38,17 +49,17 @@ SAMPLE_FIELDS = [
         Field("total_dna_rna",       "Total DNA / RNA",  float_opt,     4),
         Field("index_name",          "Index name",       str_opt,       8),
         Field("index_seq",           "Index Seq",        str_opt,       15),
-        Field("primers",             "Primers, Linkers or RE", str_opt, 10),
-        Field("num_reads",           "Approx no. Reads", str_opt,       8)
+        Field("primers",             "Primers, Linkers or RE sites present?", str_opt, 10),
+        Field("num_reads",           "Approx no. Reads, Gb or lanes requested", str_opt,       8)
         ]
 
-MAX_SAMPLES = 16000
+MAX_SAMPLES = 4 # TODO 16000
 
 class ImportException(Exception):
     pass
 
 
-def import_file(fh):
+def import_excel_file(wb):
     """Simple importer which reads the sample table Excel file and
     produces a list of dicts, one for each sample (identical to the
     format stored in the DB and exported to the LIMS, etc.)
@@ -56,12 +67,6 @@ def import_file(fh):
     Only minimal validation is done. On error, an ImportException
     is raised, with a message indicating the cause.
     """
-    try:
-        wb = load_workbook(fh)
-    except Exception as e:
-        raise ImportException("Failed to import the Excel file. Please use a " +
-        "file in Microsoft Excel format (xlsx). (Error: " + str(e) + ")")
-
     try:
         ws = wb.worksheets[0]
     except IndexError:
@@ -93,6 +98,23 @@ def import_file(fh):
                 "(MAX_SAMPLES).".format(MAX_SAMPLES))
 
     return samples
+
+def check_csv_header(self):
+
+
+
+def import_csv(wb):
+    """CSV"""
+    return ffff
+
+def import_file(file_data):
+    is_csv = check_csv_header(file_data)
+
+    try:
+        wb = load_workbook(fh)
+    except Exception as e:
+        raise ImportException("Failed to import the Excel file. (Error: " + str(e) + ")")
+
 
 
 class Cell(object):
@@ -131,7 +153,8 @@ def validate_table(samples_raw):
             value = sample_raw.get(field.id, '')
             try:
                 value = field.validator(value)
-                sample[field.id] = value
+                if value is not None:
+                    sample[field.id] = value
                 row.append(Cell(field, True, str(value), None))
             except ValidationError, e:
                 row.append(Cell(field, False, str(value), str(e)))

@@ -14,11 +14,10 @@ from cStringIO import StringIO
 import tornado.web
 
 from orderportal import constants
-from orderportal import saver
+from order import OrderSaver
 from orderportal import settings
 from orderportal import utils
 from orderportal.fields import Fields
-from orderportal.message import MessageSaver
 from orderportal.requesthandler import RequestHandler, ApiV1Mixin
 
 from orderportal.order import OrderMixin
@@ -51,19 +50,28 @@ class OrderSamples(OrderMixin, RequestHandler):
             raise RedirectException()
         return order
 
-    def get_samples_from_post(self, request_args):
-        samples = {}
-        for i in range(nsc_transporter.MAX_SAMPLES):
+    def get_samples_from_post(self):
+        samples = []
+
+        n_rows = min(
+                nsc_transporter.MAX_SAMPLES,
+                int(self.get_argument('n_rows', 0))
+                )
+
+        for i in range(n_rows):
             sample = dict(
-                (field, self.get_argument(str(i) + '_' + field.id, ''))
+                (field.id, self.get_argument(field.id + "_" + str(i), ''))
                 for field in nsc_transporter.SAMPLE_FIELDS
             )
-            if any(sample.values()):
-                samples.append(sample)
-            else:
-                break
+            samples.append(sample)
         return samples
 
+    def get_samples_from_upload(self):
+        try:
+            infile = self.request.files['file'][0]
+            return nsc_transporter.import_file(infile)
+        except (KeyError, IndexError):
+            raise nsc_transporter.ImportException("No file was uploaded")
 
     @tornado.web.authenticated
     def get(self, iuid):
@@ -72,14 +80,9 @@ class OrderSamples(OrderMixin, RequestHandler):
         except RedirectException:
             return
 
-        samples = order.get("samples")
-        if samples:
-            xxx
-        else:
-            table = None
-
-        self.prepare_page(order, order.get('samples', []))
-
+        samples = order.get('samples', [])
+        validation_table, sample_list = nsc_transporter.validate_table(samples)
+        self.prepare_page(order, validation_table, sample_list, [])
 
     @tornado.web.authenticated
     def post(self, iuid):
@@ -92,35 +95,43 @@ class OrderSamples(OrderMixin, RequestHandler):
         except ValueError, msg:
             self.see_other('home', error=str(msg))
 
-        try:
-            infile = self.request.files['file'][0]
-            data = nsc_transporter.import_file(infile)
-        except (KeyError, IndexError):
-            data = self.get_samples_from_post()
+        messages = []
 
-        if self.get_argument('clear', False):
-            pass
+        # Sample data selection:
+        # upload (replace all) / clear (all) / alter existing
+        if self.get_argument('upload', False):
+            try:
+                data = self.get_samples_from_upload()
+            except nsc_transporter.ImportException, e:
+                messages.append(str(e))
+                data = order.get('samples', [])
+        elif self.get_argument('clear', False):
+            data = []
         else:
+            data = self.get_samples_from_post()
+            if not data:
+                data = order.get('samples', [])
 
             if self.get_argument('add-sample', False):
                 sample_data = dict(
-                        (f.id, kwargs.get(f.id, ''))
+                        (f.id, self.get_argument(f.id, ''))
                         for f in nsc_transporter.SAMPLE_FIELDS
                     )
                 data.append(sample_data)
 
-            validation_table, sample_list = nsc_transporter.validate_table(samples)
-
+        validation_table, sample_list = nsc_transporter.validate_table(data)
 
         # Determine which button was used
-        if kwargs.has_key('submit'):
+        if self.get_argument('submit', False):
             print ("hello from submitQ")
-        elif kwargs.has_key('save'):
-            print ("hello from save()")
-        elif kwargs.has_key('add-sample'):
-            self.prepare_page(order, data)
-        else:
-            self.prepare_page(order, [])
+            # TODO: if it's valid, redirect back to order page
+            self.see_other('order', order.get('identifier'))
+            return
+        elif self.get_argument('save', False) or self.get_argument('clear', False):
+            with OrderSaver(doc=order, rqh=self):
+                order['samples'] = data
+
+        self.prepare_page(order, validation_table, sample_list, messages)
 
 
     def prepare_page(self, order, validation_table, sample_list, messages=[]):
@@ -130,6 +141,6 @@ class OrderSamples(OrderMixin, RequestHandler):
                     is_editable=self.is_admin() or self.is_editable(order),
                     messages=messages,
                     table=validation_table,
-                    valid=validation_table and all(c.valid for c in r for r in validation_table),
+                    valid=validation_table and all(c.valid for r in validation_table for c in r),
                     columns=nsc_transporter.SAMPLE_FIELDS
                     )
