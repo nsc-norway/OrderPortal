@@ -1,56 +1,56 @@
 import itertools
-
+import csv
+import io
+import traceback # TODO remove
+from openpyxl import load_workbook
 
 class ValidationError(Exception):
     """Used internally for validation functions"""
     pass
 
-def int_req(v):
+def int_val(v):
     if isinstance(v, int) or str(v).isdigit():
         return int(v)
     else:
         raise ValidationError("Enter a number")
 
-def int_opt(v):
-    return "" if v == "" else int_opt(v)
+str_val = str
 
-def str_req(v):
-    if v is None or v == "": raise ValidationError("Enter a value")
-    return str(v)
-
-str_opt = str
-
-def float_req(v):
+def float_val(v):
     try:
         return float(str(v).replace(",","."))
     except ValueError:
         raise ValidationError("Enter a decimal number")
 
-def float_opt(v):
-    return "" if v == "" else float_req(v)
+def index_seq(v):
+    if set(str(v).upper()) <= set("AGCT-"):
+        return str(v).upper()
+    else:
+        raise ValidationError("Use only A,C,G,T and hyphen")
+
 
 class Field(object):
-    def __init__(self, id, label, validator, width):
+    def __init__(self, id, label, required, validator, width):
         self.id = id
         self.label = label
+        self.required = required
         self.validator = validator
         self.width = width
 
 # First arg:  Internal label
 # Second arg: Header in spreadsheet / CSV / table
 SAMPLE_FIELDS = [
-#        Field("sample_number",       "Number",           int_req,       4),
-        Field("plate",               "Plate",            str_opt,       4),
-        Field("sample_name",         "Sample name",      str_req,       10),
-        Field("conc",                "Conc.",            float_req,     4),
-        Field("a_260_280",           "A260/280",         float_opt,     4),
-        Field("a_260_230",           "A260/230",         float_opt,     4),
-        Field("volume",              "Volume provided",  float_opt,     4),
-        Field("total_dna_rna",       "Total DNA / RNA",  float_opt,     4),
-        Field("index_name",          "Index name",       str_opt,       8),
-        Field("index_seq",           "Index Seq",        str_opt,       15),
-        Field("primers",             "Primers, Linkers or RE sites present?", str_opt, 10),
-        Field("num_reads",           "Approx no. Reads, Gb or lanes requested", str_opt,       8)
+        Field("plate",               "Plate",            False, str_val,       4),
+        Field("sample_name",         "Sample name",      True,  str_val,       10),
+        Field("conc",                "Conc.",            True,  float_val,     4),
+        Field("a_260_280",           "A260/280",         False, float_val,     4),
+        Field("a_260_230",           "A260/230",         False, float_val,     4),
+        Field("volume",              "Volume provided",  False, float_val,     4),
+        Field("total_dna_rna",       "Total DNA / RNA",  False, float_val,     4),
+        Field("index_name",          "Index name",       False, str_val,       8),
+        Field("index_seq",           "Index Seq",        False, index_seq,     15),
+        Field("primers",             "Primers, Linkers or RE sites present?",   False, str_val, 10),
+        Field("num_reads",           "Approx no. Reads, Gb or lanes requested", False, str_val,  8)
         ]
 
 MAX_SAMPLES = 4 # TODO 16000
@@ -59,7 +59,7 @@ class ImportException(Exception):
     pass
 
 
-def import_excel_file(wb):
+def import_excel_file(buffer):
     """Simple importer which reads the sample table Excel file and
     produces a list of dicts, one for each sample (identical to the
     format stored in the DB and exported to the LIMS, etc.)
@@ -67,6 +67,12 @@ def import_excel_file(wb):
     Only minimal validation is done. On error, an ImportException
     is raised, with a message indicating the cause.
     """
+    fh = io.BytesIO(buffer)
+    try:
+        wb = load_workbook(fh)
+    except:
+        traceback.print_exc()
+        raise ImportException("The file is not a valid Excel (xlsx) spreadsheet")
     try:
         ws = wb.worksheets[0]
     except IndexError:
@@ -75,15 +81,17 @@ def import_excel_file(wb):
     col_of = {}
 
     for i in range(20):
-        val = ws.cell(row=1, column=i).value
+        val = ws.cell(row=1, column=i+1).value
         if val:
             for field in SAMPLE_FIELDS:
                 if str(val).lower().startswith(field.label.lower()):
-                    col_of[field.id] = i
+                    col_of[field.id] = i+1
 
+    if not col_of.has_key('sample_name'):
+        raise ImportException("Missing column for Sample Name")
     samples = []
     for i in range(3, MAX_SAMPLES):
-        name = ws.cell(row=i, column=col_of['sample_name'])
+        name = ws.cell(row=i+1, column=col_of['sample_name'])
         if name:
             sample = {}
             for field in SAMPLE_FIELDS:
@@ -99,23 +107,16 @@ def import_excel_file(wb):
 
     return samples
 
-def check_csv_header(self):
-
-
-
-def import_csv(wb):
-    """CSV"""
-    return ffff
-
-def import_file(file_data):
-    is_csv = check_csv_header(file_data)
-
+def import_csv_file(buffer):
+    fh = io.BytesIO(buffer)
     try:
-        wb = load_workbook(fh)
-    except Exception as e:
-        raise ImportException("Failed to import the Excel file. (Error: " + str(e) + ")")
-
-
+        reader = csv.DictReader(fh)
+        samples = list(reader)
+    except e:
+        raise ImportException("Failed to read the CSV format (" +str(e)+ ")")
+    if any(not sample.get('sample_name') for sample in samples):
+        raise ImportException("Missing sample name")
+    return samples
 
 class Cell(object):
     def __init__(self, field, valid, value, message):
@@ -152,13 +153,16 @@ def validate_table(samples_raw):
         for field in SAMPLE_FIELDS:
             value = sample_raw.get(field.id, '')
             try:
-                value = field.validator(value)
+                if field.required:
+                    if value == "":
+                        raise ValidationError("Missing value")
+                if value != "":
+                    value = field.validator(value)
                 if value is not None:
                     sample[field.id] = value
-                row.append(Cell(field, True, str(value), None))
+                row.append(Cell(field, True, value, None))
             except ValidationError, e:
-                row.append(Cell(field, False, str(value), str(e)))
+                row.append(Cell(field, False, value, str(e)))
         sample_list.append(sample)
         validation_table.append(row)
-
     return (validation_table, sample_list)

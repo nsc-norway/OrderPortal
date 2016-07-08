@@ -335,6 +335,7 @@ class OrderApiV1Mixin:
         item['links'] = dict(
             self=dict(href=self.reverse_url('order_api', order['_id'])),
             display=dict(href=self.order_reverse_url(order)))
+        item['samples'] = order.get('samples', [])
         return item
 
 

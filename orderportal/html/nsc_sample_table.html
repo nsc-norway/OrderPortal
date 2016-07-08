@@ -51,38 +51,29 @@ role="form"	method="GET">
 {% block main_content %}
 <div class="panel panel-default">
   <div class="panel-body">
-  To enter sample information:
+  To enter sample information, either enter the samples one by one below, or
+  use the following procedure:
     <ul>
-      <li>Download the
-    <a href="https://portal.sequencing.uio.no/file/Sample%20table/download">sample table template</a></li>
+    <li>Download the
+    <a href="https://portal.sequencing.uio.no/file/Sample%20table/download">sample table template (Excel format)</a>
+    or <a href="https://portal.sequencing.uio.no/file/Sample%20table/download">sample table template (CSV format)</a>.
+    </li>
     <li>Fill in information about your samples and save it</li>
     <li>Upload it in the form below</li>
     <li>Verify the output and click Save on the right</li>
   </ul>
-
-
-  {% if valid %}
-  <p>
-    Please confirm that the sample information has been imported correctly, by inspecting the table below.
-    If there is an error, contact us at <a href="mailto:post@sequencing.uio.no">post@sequencing.uio.no</a>.
-  </p>
-  {% else %}
-  <p>
-  </p>
-  {% end %}
 
   <form action="{{ reverse_url('nsc_order_samples', order['_id']) }}"
         role="form"
         enctype="multipart/form-data"
         method="POST">
     {% module xsrf_form_html() %}
-    <label for="file">Sample table (Spreadsheet: Excel or CSV)</label>
+    <label for="excel-file">Sample table (Excel format)</label>
     <div style="clear: both;"></div>
     <div class="form-group upload-box">
-      <input type="file" name="file" class="form-control">
-      <span class="help-block">
-        The sample table to upload.
-      </span>
+      <input type="file" name="excel-file" class="form-control">
+      <label for="excel-file">(Or) sample table (CSV format)</label>
+      <input type="file" name="csv-file" class="form-control">
     </div>
 
     <div class="form-group upload-btn-box">
@@ -105,7 +96,7 @@ role="form"	method="GET">
   </ul>
   {% end %}{# if messages #}
 
-  <h3>Sample information ({{ len(table) }} samples)</h3>
+  <h3>Sample information ({{ len(table) }} sample{{ '' if len(table) == 1 else 's'}})</h3>
   <form action="{{ reverse_url('nsc_order_samples', order['_id']) }}"
         fole="form"
         method="POST">
@@ -140,18 +131,11 @@ role="form"	method="GET">
         <button type="submit" class="btn btn-success"
            name="add-sample" value="add-sample">
           <span class="glyphicon glyphicon-plus"></span>
-          Add
-        </button>
+          </button>
       </td>
       {% for col in columns %}
-      {% if col.id == 'sample_number' %}
-      <td class="input">(new)</td>
-      {% else %}
       <td class="input">
-        <input type="text" value="" id="{{ col.id }}"
-              name="{{ col.id }}" size="{{ col.width }}">
       </td>
-      {% end %}
       {% end %}
     </tr>
   </table>

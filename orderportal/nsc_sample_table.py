@@ -52,7 +52,6 @@ class OrderSamples(OrderMixin, RequestHandler):
 
     def get_samples_from_post(self):
         samples = []
-
         n_rows = min(
                 nsc_transporter.MAX_SAMPLES,
                 int(self.get_argument('n_rows', 0))
@@ -67,11 +66,21 @@ class OrderSamples(OrderMixin, RequestHandler):
         return samples
 
     def get_samples_from_upload(self):
+        """Runs CSV import if CSV file present, else runs
+        Excel import if excel file present, else raises
+        exception."""
+
         try:
-            infile = self.request.files['file'][0]
-            return nsc_transporter.import_file(infile)
+            infile = self.request.files['csv-file'][0]['body']
         except (KeyError, IndexError):
-            raise nsc_transporter.ImportException("No file was uploaded")
+            try:
+                infile = self.request.files['excel-file'][0]['body']
+            except (KeyError, IndexError):
+                raise nsc_transporter.ImportException("No file was uploaded")
+            else:
+                return nsc_transporter.import_excel_file(infile)
+        else:
+            return nsc_transporter.import_csv_file(infile)
 
     @tornado.web.authenticated
     def get(self, iuid):
@@ -102,7 +111,7 @@ class OrderSamples(OrderMixin, RequestHandler):
         if self.get_argument('upload', False):
             try:
                 data = self.get_samples_from_upload()
-            except nsc_transporter.ImportException, e:
+            except nsc_transporter.ImportException as e:
                 messages.append(str(e))
                 data = order.get('samples', [])
         elif self.get_argument('clear', False):
@@ -113,24 +122,22 @@ class OrderSamples(OrderMixin, RequestHandler):
                 data = order.get('samples', [])
 
             if self.get_argument('add-sample', False):
-                sample_data = dict(
-                        (f.id, self.get_argument(f.id, ''))
-                        for f in nsc_transporter.SAMPLE_FIELDS
-                    )
-                data.append(sample_data)
+                data.append({})
 
         validation_table, sample_list = nsc_transporter.validate_table(data)
 
         # Determine which button was used
         if self.get_argument('submit', False):
-            print ("hello from submitQ")
             # TODO: if it's valid, redirect back to order page
+            # Determine how navigation will work in general
             self.see_other('order', order.get('identifier'))
             return
         elif self.get_argument('save', False) or self.get_argument('clear', False):
             with OrderSaver(doc=order, rqh=self):
-                order['samples'] = data
-
+                order['samples'] = [
+                    dict((c.field.id, c.value) for c in row)
+                    for row in validation_table
+                    ]
         self.prepare_page(order, validation_table, sample_list, messages)
 
 
