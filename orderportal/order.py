@@ -5,6 +5,7 @@ from __future__ import print_function, absolute_import
 import logging
 import re
 import urlparse
+import base64
 from collections import OrderedDict as OD
 from cStringIO import StringIO
 
@@ -508,15 +509,22 @@ class OrderApiV1(ApiV1Mixin, OrderApiV1Mixin, Order):
         data['fields'] = order['fields']
         data['invalid'] = order['invalid']
         files = []
-        if self.is_attachable(order):
-            for filename in order.get('_attachments', []):
-                stub = order['_attachments'][filename]
-                files.append(dict(filename=filename,
-                                  size=stub['length'],
-                                  content_type=stub['content_type']))
+        if self.get_argument('full', False):
+            if self.is_attachable(order):
+                for filename in order.get('_attachments', []):
+                    stub = order['_attachments'][filename]
+                    content = self.db.get_attachment(order, filename).read()
+                    files.append(dict(filename=filename,
+                                      size=stub['length'],
+                                      content_type=stub['content_type'],
+                                      content=base64.b64encode(content)))
                 files.sort(lambda i,j: cmp(i['filename'].lower(),
                                            j['filename'].lower()))
-        data['files'] = files
+            data['files'] = files
+            data['samples'] = order.get('samples', [])
+            self.set_header('Content-Type', "application/json")
+            self.set_header('Content-Disposition',
+                            'attachment; filename="{0}.json"'.format(order['_id']))
         self.write(data)
 
 

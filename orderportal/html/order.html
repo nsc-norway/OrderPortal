@@ -12,6 +12,9 @@
 <a href="{{ reverse_url('order_api', order['_id']) }}">
   {% module Icon('json') %} JSON
 </a>
+<a href="{{ reverse_url('order_api', order['_id']) }}?full=true">
+  {% module Icon('json') %} Export
+</a>
 {% end %}
 
 {% block meta_content %}
