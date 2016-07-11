@@ -41,6 +41,7 @@ class Field(object):
 # Second arg: Header in spreadsheet / CSV / table
 SAMPLE_FIELDS = [
         Field("plate",               "Plate",            False, str_val,       4),
+        Field("position",            "Position",         False, str_val,       2),
         Field("sample_name",         "Sample name",      True,  str_val,       10),
         Field("conc",                "Conc.",            True,  float_val,     4),
         Field("a_260_280",           "A260/280",         False, float_val,     4),
@@ -84,26 +85,29 @@ def import_excel_file(buffer):
         val = ws.cell(row=1, column=i+1).value
         if val:
             for field in SAMPLE_FIELDS:
-                if str(val).lower().startswith(field.label.lower()):
+                if unicode(val).lower().startswith(field.label.lower()):
                     col_of[field.id] = i+1
 
     if not col_of.has_key('sample_name'):
         raise ImportException("Missing column for Sample Name")
     samples = []
-    for i in range(3, MAX_SAMPLES):
-        name = ws.cell(row=i+1, column=col_of['sample_name'])
+    for i in range(3, 3+MAX_SAMPLES):
+        name = ws.cell(row=i, column=col_of['sample_name']).value
         if name:
             sample = {}
             for field in SAMPLE_FIELDS:
-                sample[key] = ws.cell(row=i, column=col_of[field.id]).value
+                if col_of.has_key(field.id):
+                    val = ws.cell(row=i, column=col_of[field.id]).value
+                    if val is not None:
+                        sample[field.id] = val
+            samples.append(sample)
         else:
             break
 
-    if ws.cell(row=i+1, column=1).value:
-        raise ImportException("We only support importing {0} samples. Please "+
-                "contact NSC staff if you would like to submit more samples, "+
-                "and the webmaster may be able to increase this limit "+
-                "(MAX_SAMPLES).".format(MAX_SAMPLES))
+    if ws.cell(row=i+1, column=col_of['sample_name']).value:
+        raise ImportException(("We only support importing {0} samples. Please "+
+                "contact NSC staff if you would like to submit more samples."
+                ).format(MAX_SAMPLES))
 
     return samples
 
