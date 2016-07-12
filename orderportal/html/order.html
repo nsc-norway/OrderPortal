@@ -191,9 +191,13 @@
 	<th>Samples</th>
 	<td>{{ 'No' if not samples else len(samples) }} samples -
     {% if order.get('samples_valid') %}
-      <span class="text-success">OK</span>
+      <span class="text-success">
+        <span class="glyphicon glyphicon-ok"></span>
+        OK</span>
     {% else %}
-      <span class="text-danger">Incomplete information</span>
+      <span class="text-danger">
+        <span class="glyphicon glyphicon-remove"></span>
+        Incomplete information</span>
     {% end %}
     {% if is_editable %}
     <div>
