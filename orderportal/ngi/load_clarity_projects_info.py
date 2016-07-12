@@ -141,7 +141,7 @@ class Clarity(object):
             else:
                 record['portal_id'] = 'NGI{0:=05d}'.format(value)
 
-def get_orders(db, statuses=[]):
+def get_orders(db, statuses=[], verbose=False):
     """Get all orders in CouchDB having a 'identifier' field.
     Return a lookup with 'identifier' as key.
     If 'statuses' is given, then only return orders with one of those.
@@ -154,6 +154,8 @@ def get_orders(db, statuses=[]):
         identifier = doc.get('identifier')
         if not identifier: continue
         result[identifier] = doc
+    if verbose:
+        print(len(result), 'orders in OrderPortal')
     return result
 
 def process_project(db, project, orders_lookup, verbose=False, dryrun=False):
@@ -162,7 +164,6 @@ def process_project(db, project, orders_lookup, verbose=False, dryrun=False):
     2) Set the tags, if not done.
     3) Set the status history.
     4) Set the current status.
-    XXX Avoid status 'aborted' until sorted out issue with its logic.
     """
     try:
         portal_id = project['portal_id']
@@ -171,7 +172,7 @@ def process_project(db, project, orders_lookup, verbose=False, dryrun=False):
     try:
         order = orders_lookup[portal_id]
     except KeyError:
-        if verbose: print('Warning: could not find order', portal_id)
+        print('Warning: could not find order', portal_id)
         return
     changed = False
 
@@ -191,7 +192,7 @@ def process_project(db, project, orders_lookup, verbose=False, dryrun=False):
         processing = reduce(min, processing)
         if processing:
             current = 'processing'
-            if processing != order['history'].get('processing'):
+            if processing > order['history'].get('processing'):
                 changed = True
                 if verbose: print('processing', processing)
             else:
@@ -205,25 +206,24 @@ def process_project(db, project, orders_lookup, verbose=False, dryrun=False):
         closed = reduce(min, closed)
         if closed:
             current = 'closed'
-            if closed != order['history'].get('closed'):
+            if closed > order['history'].get('closed'):
                 changed = True
                 if verbose: print('closed', closed)
             else:
                 closed = False
 
-    # XXX Avoid status 'aborted' until sorted out issue with its logic.
-    # aborted = project.get('aborted')
-    # if aborted:
-    #     current = 'aborted'
-    #     if aborted != order['history'].get('aborted'):
-    #         changed = True
-    #         if verbose: print('aborted', aborted)
-    #     else:
-    #         aborted = False
+    aborted = project.get('aborted')
+    if aborted:
+        current = 'aborted'
+        if aborted > order['history'].get('aborted'):
+            changed = True
+            if verbose: print('aborted', aborted)
+        else:
+            aborted = False
 
     if current and current != order.get('status'):
         changed = True
-        if verbose: print('current', current, order.get('status'))
+        if verbose: print('current', current)
     else:
         current = False
     
@@ -238,9 +238,8 @@ def process_project(db, project, orders_lookup, verbose=False, dryrun=False):
                     saver['history']['processing'] = processing
                 if closed:
                     saver['history']['closed'] = closed
-                # XXX Avoid status 'aborted' until sorted out issue with its logic.
-                # if aborted:
-                #     saver['history']['aborted'] = aborted
+                if aborted:
+                    saver['history']['aborted'] = aborted
                 # Required to record the change in the log.
                 if saver['history'] != old_order['history']:
                     saver.changed['history'] = saver['history']
@@ -265,9 +264,7 @@ if __name__ == '__main__':
                         verbose=options.verbose)
 
     db = utils.get_db()
-    orders_lookup = get_orders(db)
-    if options.verbose:
-        print(len(orders_lookup), 'orders in OrderPortal')
+    orders_lookup = get_orders(db, verbose=options.verbose)
 
     clarity = Clarity(verbose=options.verbose)
     clarity_projects = clarity.get_all_projects()
