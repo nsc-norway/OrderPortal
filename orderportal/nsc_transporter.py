@@ -1,3 +1,5 @@
+# coding=utf-8
+
 import itertools
 import csv
 import io
@@ -43,18 +45,18 @@ SAMPLE_FIELDS = [
         Field("plate",               "Plate",            False, str_val,       4),
         Field("position",            "Position",         False, str_val,       2),
         Field("sample_name",         "Sample name",      True,  str_val,       10),
-        Field("conc",                "Conc.",            True,  float_val,     4),
+        Field("conc",                u"Conc. (ng/µl)",   True,  float_val,     4),
         Field("a_260_280",           "A260/280",         False, float_val,     4),
         Field("a_260_230",           "A260/230",         False, float_val,     4),
-        Field("volume",              "Volume provided",  False, float_val,     4),
-        Field("total_dna_rna",       "Total DNA / RNA",  False, float_val,     4),
+        Field("volume",              u"Volume provided (µl)",  False, float_val,     4),
+        Field("total_dna_rna",       u"Total DNA / RNA (µg)",  False, float_val,     4),
         Field("index_name",          "Index name",       False, str_val,       8),
         Field("index_seq",           "Index Seq",        False, index_seq,     15),
         Field("primers",             "Primers, Linkers or RE sites present?",   False, str_val, 10),
         Field("num_reads",           "Approx no. Reads, Gb or lanes requested", False, str_val,  8)
         ]
 
-MAX_SAMPLES = 4 # TODO 16000
+MAX_SAMPLES = 16000
 
 class ImportException(Exception):
     pass
@@ -116,7 +118,7 @@ def import_csv_file(buffer):
     try:
         reader = csv.DictReader(fh)
         samples = list(reader)
-    except e:
+    except Exception as e:
         raise ImportException("Failed to read the CSV format (" +str(e)+ ")")
     if any(not sample.get('sample_name') for sample in samples):
         raise ImportException("Missing sample name")

@@ -189,9 +189,18 @@
       </tr>
       <tr>
 	<th>Samples</th>
-	<td>No samples
+	<td>{{ 'No' if not samples else len(samples) }} samples -
+    {% if order.get('samples_valid') %}
+      <span class="text-success">OK</span>
+    {% else %}
+      <span class="text-danger">Incomplete information</span>
+    {% end %}
     {% if is_editable %}
-    <div><a href="{{ reverse_url('nsc_order_samples', order['_id']) }}">View/edit sample information...</a> TODO!</div>
+    <div>
+      <a href="{{ reverse_url('nsc_order_samples', order['_id']) }}">
+        View/edit sample information...
+      </a>
+    </div>
     {% end %}
   </td>
       </tr>

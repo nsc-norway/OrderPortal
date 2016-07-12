@@ -19,32 +19,11 @@
 <form action="{{ reverse_url('order', order['_id']) }}"
 role="form"	method="GET">
   <input type="hidden" name="_http_method" value="delete">
-  <button type="submit" class="btn btn-danger btn-block">
-    <span class="glyphicon glyphicon-trash"></span>
-    Cancel
+  <button type="submit" class="btn btn-primary btn-block">
+    Go to order
   </button>
 </form>
 
-<br>
-<br>
-
-{% if valid %}
-<form action="{{ reverse_url('order', order['_id']) }}"
-  	role="form"
-  	method="POST">
-  {% module xsrf_form_html() %}
-  <p>
-    <button type="submit" name="submit" class="btn btn-lg btn-success btn-block">
-      <span class="glyphicon glyphicon-trash"></span>
-      Save
-    </button>
-  </p>
-</form>
-{% else %}
-<div class="well well-lg text-danger">
-  Upload a valid sample table to save.
-</div>
-{% end %} {# if targets #}
 
 {% end %} {# block meta_content #}
 
@@ -114,7 +93,12 @@ role="form"	method="GET">
     </tr>
     {% for i_row, row in enumerate(table) %}
     <tr>
-    <td></td>
+    <td>
+        <button type="submit" class="btn btn-warning btn-xs"
+		name="remove-sample-{{ i_row }}" value="remove-sample">
+          <span class="glyphicon glyphicon-trash"></span>
+          </button>
+    </td>
       {% for cell in row %}
       <td {{ 'class="validation-error"' if not cell.valid else '' }}>
         {% if not cell.valid %}
@@ -128,7 +112,7 @@ role="form"	method="GET">
     {% end %}
     <tr>
       <td class="input">
-        <button type="submit" class="btn btn-success"
+        <button type="submit" class="btn btn-primary btn-xs"
            name="add-sample" value="add-sample">
           <span class="glyphicon glyphicon-plus"></span>
           </button>

@@ -124,6 +124,10 @@ class OrderSamples(OrderMixin, RequestHandler):
             if self.get_argument('add-sample', False):
                 data.append({})
 
+        for i, _ in reversed(list(enumerate(data))):
+            if self.get_argument('remove-sample-' + str(i), False):
+                del data[i]
+
         validation_table, sample_list = nsc_transporter.validate_table(data)
 
         # Determine which button was used
@@ -138,6 +142,11 @@ class OrderSamples(OrderMixin, RequestHandler):
                     dict((c.field.id, c.value) for c in row)
                     for row in validation_table
                     ]
+                order['samples_valid'] = all(
+                            cell.valid
+                            for row in validation_table
+                            for cell in row
+                            ) and validation_table != []
         self.prepare_page(order, validation_table, sample_list, messages)
 
 

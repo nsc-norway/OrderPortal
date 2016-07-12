@@ -77,6 +77,8 @@ class OrderSaver(saver.Saver):
         for field in fields:
             if field['depth'] == 0:
                 self.check_validity(field)
+        if not self.doc.get('samples_valid'):
+            self.doc['invalid']['nsc_samples'] = "Missing / incorrect sample information"
 
     def check_validity(self, field):
         """Check validity of converted field values.
@@ -468,6 +470,7 @@ class Order(OrderMixin, RequestHandler):
                     status=self.get_order_status(order),
                     form=form,
                     fields=form['fields'],
+                    samples=order.get('samples', []),
                     attached_files=files,
                     is_editable=self.is_admin() or self.is_editable(order),
                     is_clonable=self.is_clonable(order),
