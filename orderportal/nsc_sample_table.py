@@ -121,14 +121,29 @@ class OrderSamples(OrderMixin, RequestHandler):
             if not data:
                 data = order.get('samples', [])
 
-            if self.get_argument('add-sample', False):
-                data.append({})
-
         for i, _ in reversed(list(enumerate(data))):
             if self.get_argument('remove-sample-' + str(i), False):
                 del data[i]
 
         validation_table, sample_list = nsc_transporter.validate_table(data)
+        is_valid = all(
+                    cell.valid
+                    for row in validation_table
+                    for cell in row
+                    ) and validation_table != []
+
+        if not is_valid:
+            if self.get_argument('upload', False):
+                messages.append("See remarks in red below. You may correct your file and upload it again.")
+            else:
+                messages.append("Please correct any incorrect / missing values in the table below.")
+
+        if self.get_argument('add-sample', False):
+            data.append({})
+            validation_table.append(
+                [nsc_transporter.Cell(field, True, "", None) for field in nsc_transporter.SAMPLE_FIELDS]
+            )
+            sample_list.append({})
 
         # Determine which button was used
         if self.get_argument('submit', False):
@@ -142,11 +157,7 @@ class OrderSamples(OrderMixin, RequestHandler):
                     dict((c.field.id, c.value) for c in row)
                     for row in validation_table
                     ]
-                order['samples_valid'] = all(
-                            cell.valid
-                            for row in validation_table
-                            for cell in row
-                            ) and validation_table != []
+                order['samples_valid'] = is_valid
         self.prepare_page(order, validation_table, sample_list, messages)
 
 

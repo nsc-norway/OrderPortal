@@ -3,6 +3,7 @@
 import itertools
 import csv
 import io
+import re
 import traceback # TODO remove
 from openpyxl import load_workbook
 
@@ -24,12 +25,17 @@ def float_val(v):
     except ValueError:
         raise ValidationError("Enter a decimal number")
 
+def sample_name(v):
+    if re.match(r"[A-Za-z0-9-]+$", v):
+        return v
+    else:
+        raise ValidationError("Use letters (a-z), numbers and hyphen (-).")
+
 def index_seq(v):
     if set(str(v).upper()) <= set("AGCT-"):
         return str(v).upper()
     else:
         raise ValidationError("Use only A,C,G,T and hyphen")
-
 
 class Field(object):
     def __init__(self, id, label, required, validator, width):
@@ -44,7 +50,7 @@ class Field(object):
 SAMPLE_FIELDS = [
         Field("plate",               "Plate",            False, str_val,       4),
         Field("position",            "Position",         False, str_val,       2),
-        Field("sample_name",         "Sample name",      True,  str_val,       10),
+        Field("sample_name",         "Sample name",      True,  sample_name,  10),
         Field("conc",                u"Conc. (ng/µl)",   True,  float_val,     4),
         Field("a_260_280",           "A260/280",         False, float_val,     4),
         Field("a_260_230",           "A260/230",         False, float_val,     4),
