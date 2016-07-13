@@ -126,17 +126,18 @@ class OrderSamples(OrderMixin, RequestHandler):
                 del data[i]
 
         validation_table, sample_list = nsc_transporter.validate_table(data)
-        is_valid = all(
-                    cell.valid
+        invalid = sum(
+                    1
                     for row in validation_table
                     for cell in row
-                    ) and validation_table != []
+                    if not cell.valid
+                    )
 
-        if not is_valid:
+        if invalid:
             if self.get_argument('upload', False):
                 messages.append("See remarks in red below. You may correct your file and upload it again.")
             else:
-                messages.append("Please correct any incorrect / missing values in the table below.")
+                messages.append("Please correct " + str(invalid)+ " incorrect / missing values in the table below.")
 
         if self.get_argument('add-sample', False):
             data.append({})
@@ -157,7 +158,7 @@ class OrderSamples(OrderMixin, RequestHandler):
                     dict((c.field.id, c.value) for c in row)
                     for row in validation_table
                     ]
-                order['samples_valid'] = is_valid
+                order['samples_valid'] = (not invalid) and validation_table != []
         self.prepare_page(order, validation_table, sample_list, messages)
 
 
