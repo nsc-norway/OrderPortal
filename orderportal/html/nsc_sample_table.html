@@ -10,15 +10,11 @@
 {% end %}
 
 {% block body_header_meta %}
-<a href="{{ reverse_url('order_api', order['_id']) }}">
-  {% module Icon('json') %} JSON
-</a>
 {% end %}
 
 {% block meta_content %}
 <form action="{{ reverse_url('order', order['_id']) }}"
 role="form"	method="GET">
-  <input type="hidden" name="_http_method" value="delete">
   <button type="submit" class="btn btn-primary btn-block">
     Back to order
   </button>
