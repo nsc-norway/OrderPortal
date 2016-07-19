@@ -100,7 +100,7 @@
   </form>
   {% end %} {# for target in targets #}
   {% else %}
-  {% if order['invalid'] %}
+  {% if order['invalid'] or not order.get('samples_valid') %}
   <div class="well well-lg text-danger">
     Order cannot be submitted due to invalid or missing values.
   </div>

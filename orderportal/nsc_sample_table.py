@@ -116,7 +116,7 @@ class OrderSamples(OrderMixin, RequestHandler):
                 data = order.get('samples', [])
         elif self.get_argument('clear', False):
             data = []
-        else:
+        elif not self.get_argument('submit', False):
             data = self.get_samples_from_post()
             if not data:
                 data = order.get('samples', [])

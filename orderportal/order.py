@@ -77,8 +77,6 @@ class OrderSaver(saver.Saver):
         for field in fields:
             if field['depth'] == 0:
                 self.check_validity(field)
-        if not self.doc.get('samples_valid'):
-            self.doc['invalid']['nsc_samples'] = "Missing / incorrect sample information"
 
     def check_validity(self, field):
         """Check validity of converted field values.
@@ -208,7 +206,7 @@ class OrderMixin(object):
         for transition in settings['ORDER_TRANSITIONS']:
             if transition['source'] != order['status']: continue
             # Check validity
-            if transition.get('require') == 'valid' and order['invalid']:
+            if transition.get('require') == 'valid' and (order['invalid'] or not order.get('samples_valid')):
                 continue
             permission = transition['permission']
             if (self.is_admin() and constants.ADMIN in permission) or \
