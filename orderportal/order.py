@@ -3,11 +3,12 @@
 from __future__ import print_function, absolute_import
 
 import logging
-import re
-import urlparse
 from collections import OrderedDict as OD
 from cStringIO import StringIO
+import os.path
+import re
 import traceback
+import urlparse
 
 import tornado.web
 
@@ -30,6 +31,23 @@ class OrderSaver(saver.Saver):
         """
         self.changed_status = None
         self.files = []
+        self.filenames = set(self.doc.get('_attachments', []))
+
+    def add_file(self, infile):
+        "Add the given file to the files. Return the unique filename."
+        filename = infile.filename
+        if filename in self.filenames:
+            count = 1
+            while True:
+                filename, ext = os.path.splitext(infile.filename)
+                filename = "{0}_{1}{2}".format(filename, count, ext)
+                if filename not in self.filenames: break
+                count += 1
+        self.filenames.add(filename)
+        self.files.append(dict(filename=filename,
+                               body=infile.body,
+                               content_type=infile.content_type))
+        return filename
 
     def set_identifier(self, form):
         """Set the order identifier if format defined.
@@ -71,12 +89,10 @@ class OrderSaver(saver.Saver):
                 except (KeyError, IndexError):
                     continue
                 else:
-                    self.files.append(infile)
-                    value = infile.filename
+                    value = self.add_file(infile)
                     self.removed_files.append(docfields.get(identifier))
             elif field['type'] == constants.MULTISELECT:
                 value = self.rqh.get_arguments(identifier)
-                logging.debug("multiselect> %s", value)
             elif field['type'] == constants.TABLE:
                 value = docfields.get(identifier) or []
                 for i, row in enumerate(value):
@@ -196,9 +212,9 @@ class OrderSaver(saver.Saver):
                         kwargs = dict()
                         if field['type'] == constants.FILE:
                             for file in self.files:
-                                if file.filename == value:
-                                    kwargs['body'] = file.body
-                                    kwargs['content_type'] = file.content_type
+                                if file['filename'] == value:
+                                    kwargs['body'] = file['body']
+                                    kwargs['content_type']= file['content_type']
                                     break
                         processor.run(value, **kwargs)
         except ValueError, msg:
@@ -235,9 +251,10 @@ class OrderSaver(saver.Saver):
             # I found this solution by chance...
             for file in self.files:
                 self.db.put_attachment(self.doc,
-                                       StringIO(file.body),
-                                       filename=file.filename,
-                                       content_type=file.content_type)
+                                       StringIO(file['body']),
+                                       filename=file['filename'],
+                                       content_type=file['content_type'])
+
     def prepare_message(self):
         """Prepare a message to send after status change.
         It is sent later by cron job script 'script/messenger.py'
@@ -315,8 +332,8 @@ class OrderMixin(object):
 
     def is_editable(self, order):
         "Is the order editable by the current user?"
-        if not self.global_modes['allow_order_editing']: return False
         if self.is_admin(): return True
+        if not self.global_modes['allow_order_editing']: return False
         status = self.get_order_status(order)
         edit = status.get('edit', [])
         if self.is_staff() and constants.STAFF in edit: return True
@@ -326,16 +343,19 @@ class OrderMixin(object):
     def check_editable(self, order):
         "Check if current user may edit the order."
         if self.is_editable(order): return
-        raise ValueError("You may not edit the {0}."
-                         .format(utils.term('order')))
+        if not self.global_modes['allow_order_editing']:
+            msg = '{0} editing is currently disabled.'
+        else:
+            msg = 'You may not edit the {0}.'
+        raise ValueError(msg.format(utils.term('order')))
 
     def is_attachable(self, order):
         "Check if the current user may attach a file to the order."
         if self.is_admin(): return True
         status = self.get_order_status(order)
-        edit = status.get('attach', [])
-        if self.is_staff() and constants.STAFF in edit: return True
-        if self.is_owner(order) and constants.USER in edit: return True
+        attach = status.get('attach', [])
+        if self.is_staff() and constants.STAFF in attach: return True
+        if self.is_owner(order) and constants.USER in attach: return True
         return False
 
     def check_attachable(self, order):
@@ -363,27 +383,40 @@ class OrderMixin(object):
                (self.is_staff() and constants.STAFF in permission) or \
                (self.is_owner(order) and constants.USER in permission):
                 result.extend(transition['targets'])
-        return [settings['ORDER_STATUSES_LOOKUP'][t] for t in result]
+        targets = [settings['ORDER_STATUSES_LOOKUP'][t] for t in result]
+        if not self.global_modes['allow_order_submission']:
+            targets = [t for t in targets
+                       if t['identifier'] != constants.SUBMITTED]
+        return targets
+
+    def is_transitionable(self, order, status, check_valid=True):
+        "Can the order be set to the given status?"
+        targets = self.get_targets(order, check_valid=check_valid)
+        return status in [t['identifier'] for t in targets]
+
+    def check_transitionable(self, order, status, check_valid=True):
+        "Check if the current user may set the order to the given status."
+        if self.is_transitionable(order, status, check_valid=check_valid):
+            return
+        raise ValueError('You may not change status of {0} to {1}.'
+                         .format(utils.term('order'), status))
 
     def is_submittable(self, order, check_valid=True):
         "Is the order submittable? Special hard-wired status."
-        for target in self.get_targets(order, check_valid=check_valid):
-            if target['identifier'] == 'submitted':
-                return True
-        return False
+        targets = self.get_targets(order, check_valid=check_valid)
+        return constants.SUBMITTED in [t['identifier'] for t in targets]
 
     def is_clonable(self, order):
         """Can the given order be cloned? Its form must be enabled.
         Special case: Admin can clone an order even if its form is disabled.
         """
-        if not self.global_modes['allow_order_creation']: return False
         form = self.get_entity(order['form'], doctype=constants.FORM)
         if self.is_admin():
             return form['status'] in (constants.ENABLED,
                                       constants.TESTING,
                                       constants.DISABLED)
-        else:
-            return form['status'] in (constants.ENABLED, constants.TESTING)
+        if not self.global_modes['allow_order_creation']: return False
+        return form['status'] in (constants.ENABLED, constants.TESTING)
 
 
 class Orders(RequestHandler):
@@ -582,14 +615,13 @@ class Order(OrderMixin, RequestHandler):
             return
         form = self.get_entity(order['form'], doctype=constants.FORM)
         files = []
-        if self.is_attachable(order):
-            for filename in order.get('_attachments', []):
-                stub = order['_attachments'][filename]
-                files.append(dict(filename=filename,
-                                  size=stub['length'],
-                                  content_type=stub['content_type']))
-                files.sort(lambda i,j: cmp(i['filename'].lower(),
-                                           j['filename'].lower()))
+        for filename in order.get('_attachments', []):
+            stub = order['_attachments'][filename]
+            files.append(dict(filename=filename,
+                              size=stub['length'],
+                              content_type=stub['content_type']))
+            files.sort(lambda i,j: cmp(i['filename'].lower(),
+                                       j['filename'].lower()))
         self.render('order.html',
                     title=u"{0} '{1}'".format(utils.term('Order'),
                                               order['title']),
@@ -737,12 +769,6 @@ class OrderEdit(OrderMixin, RequestHandler):
 
     @tornado.web.authenticated
     def get(self, iuid):
-        if not self.global_modes['allow_order_editing'] \
-           and self.current_user['role'] != constants.ADMIN:
-            self.see_other('home',
-                           error="{0} editing is currently disabled."
-                           .format(utils.term('Order')))
-            return
         order = self.get_entity(iuid, doctype=constants.ORDER)
         try:
             self.check_editable(order)
@@ -811,9 +837,9 @@ class OrderEdit(OrderMixin, RequestHandler):
                 else:
                     saver['owner'] = account['email']
                 saver.update_fields()
-                if flag == 'submit': # XXX Hard-wired, currently
+                if flag == constants.SUBMIT: # Hard-wired status
                     if self.is_submittable(saver.doc):
-                        saver.set_status('submitted')
+                        saver.set_status(constants.SUBMITTED)
                         message = "{0} saved and submitted."\
                             .format(utils.term('Order'))
                     else:
@@ -881,35 +907,32 @@ class OrderClone(OrderMixin, RequestHandler):
 class OrderTransition(OrderMixin, RequestHandler):
     "Change the status of an order."
 
-    API = False
+    @tornado.web.authenticated
+    def post(self, iuid, targetid):
+        order = self.get_entity(iuid, doctype=constants.ORDER)
+        try:
+            self.check_transitionable(order, targetid)
+        except ValueError, msg:
+            self.see_other('home', error=str(msg))
+            return
+        with OrderSaver(doc=order, rqh=self) as saver:
+            saver.set_status(targetid)
+        self.redirect(self.order_reverse_url(order))
+
+
+class OrderTransitionApiV1(OrderMixin, RequestHandler):
+    "Change the status of an order by an API call."
 
     @tornado.web.authenticated
     def post(self, iuid, targetid):
         order = self.get_entity(iuid, doctype=constants.ORDER)
         try:
-            self.check_editable(order)
+            self.check_transitionable(order, targetid)
         except ValueError, msg:
-            if self.API:
-                raise tornado.web.HTTPError(403,
-                                            reason="May not edit the {0}."
-                                            .format(utils.term('order')))
-            else:
-                self.see_other('home', error=str(msg))
-                return
-        for target in self.get_targets(order):
-            if target['identifier'] == targetid: break
-        else:
-            raise tornado.web.HTTPError(
-                403, reason='Invalid order transition target.')
+            raise tornado.web.HTTPError(403, reason=str(msg))
         with OrderSaver(doc=order, rqh=self) as saver:
             saver.set_status(targetid)
-        self.redirect(self.order_reverse_url(order, api=self.API))
-
-
-class OrderTransitionApiV1(OrderTransition):
-    "Change the status of an order by an API call."
-
-    API = True
+        self.redirect(self.order_reverse_url(order, api=True))
 
     def check_xsrf_cookie(self):
         "Do not check for XSRF cookie when script is calling."
@@ -985,8 +1008,5 @@ class OrderAttach(OrderMixin, RequestHandler):
             pass
         else:
             with OrderSaver(doc=order, rqh=self) as saver:
-                saver.files.append(infile)
-                saver['filename'] = infile.filename
-                saver['size'] = len(infile.body)
-                saver['content_type'] = infile.content_type or 'application/octet-stream'
+                saver.add_file(infile)
         self.redirect(self.order_reverse_url(order))

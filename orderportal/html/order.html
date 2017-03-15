@@ -100,6 +100,11 @@
   </div>
   {% end %}
   {% end %} {# if targets #}
+  {% if not global_modes['allow_order_submission'] %}
+  <div class="well well-lg text-danger">
+    {{ term('Order') }} submission is currently disabled.
+  </div>
+  {% end %} {# if not global_modes... #}
 </p>
 {% end %} {# block meta_content #}
 
@@ -202,6 +207,7 @@
 		{% else %}
 		  {{ int(0.5 + file['size'] / 1000.0) }} kB</td>
 		{% end %}
+              {% if is_attachable %}
 	      <td>
 		<form action="{{ reverse_url('order_file', order['_id'], file['filename']) }}"
 		      role="form"
@@ -215,8 +221,9 @@
 		  </button>
 		</form>
 	      </td>
+	      {% end %} {# if is_attachable #}
 	    </tr>
-	    {% end %}
+	    {% end %} {# for file in attached_files #}
 	  </table>
 	  {% if is_attachable %}
 	  <button type="button" class="btn btn-primary"
@@ -224,7 +231,7 @@
 	    <span class="glyphicon glyphicon-paperclip"></span>
 	    Attach
 	  </button>
-	  {% end %}
+	  {% end %} {# if is_attachable #}
 	</td>
       </tr>
     </table>
