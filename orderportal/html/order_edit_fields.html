@@ -211,6 +211,7 @@
 	   value="{{ value }}">
 
     {% elif field['type'] == constants.TABLE %}
+    <div class="nsc-table-wrapper">
     <table class="table table-bordered table-condensed">
       <tr>
 	<th></th>
@@ -250,7 +251,7 @@
 
       {% end %}
     </table>
-
+    </div>
     {% elif field['type'] == constants.FILE %}
     <input type="file"
 	   class="form-control"

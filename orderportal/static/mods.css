@@ -36,5 +36,5 @@
 
 div.form-group table.table { width: 1200px; max-width: 1200px; }
 div.form-group table.table td input { padding-left: 5px; padding-right: 5px; }
-/* div.form-group { overflow: scroll; } */
+div.nsc-table-wrapper { overflow-x: scroll; }
 
