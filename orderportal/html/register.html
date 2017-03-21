@@ -145,7 +145,7 @@
       University department, company section, group, or similar.
     </span>
   </div>
-
+  {% if settings.get('ACCOUNT_PI') %}
   <div class="form-group">
     <div class="row">
       <div class="col-md-6">
@@ -158,6 +158,7 @@
       </div>
     </div>
   </div>
+  {% end %}
 
   {% if settings.get('ACCOUNT_FUNDER_INFO') %}
   <div class="panel panel-default">
@@ -235,7 +236,7 @@
     </div>
   </div>
   {% end %} {# if settings.get('ACCOUNT_FUNDER_INFO') #}
-
+  {% if settings.get('ACCOUNT_CONTACT_INFO') %}
   <div class="panel panel-default">
     <div class="panel-heading">
       Postal address for delivery of paper documents, returned samples, etc.
@@ -381,6 +382,7 @@
       One or more telephone numbers, one per line.
     </span>
   </div>
+  {% end %}
 
   <div class="form-group">
     <label class="control-label"></label>

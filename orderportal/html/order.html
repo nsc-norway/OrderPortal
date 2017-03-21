@@ -12,6 +12,12 @@
 <a href="{{ order_reverse_url(order, api=True) }}">
   {% module Icon('json') %} JSON
 </a>
+{% if is_admin %}
+<a href="https://portal.sequencing.uio.no/nsc/package/{{ order['_id'] }}">
+	{% module Icon('json') %}
+	Package
+</a>
+{% end %}
 {% end %}
 
 {% block meta_content %}
@@ -100,7 +106,7 @@
   </div>
   {% end %}
   {% end %} {# if targets #}
-  {% if not global_modes['allow_order_submission'] %}
+  {% if not global_modes.get('allow_order_submission', True) %}
   <div class="well well-lg text-danger">
     {{ term('Order') }} submission is currently disabled.
   </div>
