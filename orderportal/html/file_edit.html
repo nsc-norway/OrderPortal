@@ -16,15 +16,32 @@
   <div class="form-group">
     <div class="row">
       <div class="col-md-10">
-	<label for="name">Name</label>
+	<label for="name">Title</label>
 	<input type="text" class="form-control"
-	       id="name" name="name"
-	       value="{{ file.get('name') or '' }}">
+	       id="title" name="title"
+	       value="{{ file.get('title') or '' }}">
       </div>
     </div>
     <span class="help-block">
-      Name to display for the file page.
+      Title to display in the list of documents.
     </span>
+  </div>
+
+  <div class="form-group">
+    <div class="row">
+      <div class="col-md-10">
+	<label class="control-label" for="hidden">Unlisted</label>
+	<div class="checkbox">
+	  {% set checked = file.get('hidden') and 'checked' or '' %}
+	  <label>
+	    <input type="checkbox" value="yes"
+		   id="hidden" name="hidden" {{ checked }}>
+	    Do not list the document in the user's view. 
+	    However, it is still accessible to all users who have the link.
+	  </label>
+	</div>
+      </div>
+    </div>
   </div>
 
   <div class="form-group">
@@ -61,7 +78,7 @@
 </form>
 
 <br>
-<form action="{{ reverse_url('file_meta', file['name']) }}"
+<form action="{{ reverse_url('files') }}"
       role="form"
       method="GET">
   <div class="form-group">

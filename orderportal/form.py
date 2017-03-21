@@ -119,7 +119,7 @@ class Form(FormMixin, RequestHandler):
             self.delete(iuid)
             return
         raise tornado.web.HTTPError(
-            405, reason='internal problem; POST only allowed for DELETE')
+            405, reason='Internal problem; POST only allowed for DELETE.')
 
     @tornado.web.authenticated
     def delete(self, iuid):
@@ -145,9 +145,9 @@ class FormApiV1(ApiV1Mixin, Form):
     "Form API; JSON."
 
     def render(self, templatefilename, **kwargs):
+        URL = self.absolute_reverse_url
         form = kwargs['form']
         data = OD()
-        data['base'] = self.absolute_reverse_url('home')
         data['type'] = 'form'
         data['iuid'] = form['_id']
         data['title'] = form.get('title')
@@ -155,20 +155,17 @@ class FormApiV1(ApiV1Mixin, Form):
         data['description'] = form.get('description')
         data['owner'] = dict(
             email=form['owner'],
-            links=dict(api=dict(
-                    href=self.reverse_url('account_api', form['owner'])),
-                       display=dict(
-                    href=self.reverse_url('account', form['owner']))))
+            links=dict(api=dict(href=URL('account_api', form['owner'])),
+                       display=dict(href=URL('account', form['owner']))))
         data['status'] = form['status']
         data['modified'] = form['modified']
         data['created'] = form['created']
-        data['links'] = dict(
-            self=dict(href=self.reverse_url('form_api', form['_id'])),
-            display=dict(href=self.reverse_url('form', form['_id'])))
+        data['links'] = dict(self=dict(href=URL('form_api', form['_id'])),
+                             display=dict(href=URL('form', form['_id'])))
         data['orders'] = dict(
             count=self.get_order_count(form),
-            # XXX Added API href when available.
-            display=dict(href=self.reverse_url('form_orders', form['_id'])))
+            # XXX Add API href when available.
+            display=dict(href=URL('form_orders', form['_id'])))
         data['fields'] = form['fields']
         self.write(data)
 
@@ -211,15 +208,18 @@ class FormCreate(RequestHandler):
                 data = json.loads(infile.body)
                 if data.get(constants.DOCTYPE) != constants.FORM and \
                    data.get('type') != 'form':
-                    raise ValueError('imported JSON is not a form')
+                    raise ValueError('Imported JSON is not a form.')
+            except (KeyError, IndexError):
+                pass
+            except Exception, msg:
+                self.see_other('home', error="Error importing form: %s" % msg)
+                return
+            else:
                 if not saver['description']:
                     saver['description'] = data.get('description')
                 if not saver['version']:
                     saver['version'] = data.get('version')
                 saver['fields'] = data['fields']
-            except Exception, msg:
-                self.see_other('home', error="Error importing form: %s" % msg)
-                return
         self.see_other('form', saver.doc['_id'])
 
 
@@ -322,6 +322,7 @@ class FormFieldEdit(FormMixin, RequestHandler):
                     form=form,
                     field=field,
                     fields=fields,
+                    siblings=fields.get_siblings(field, form['fields']),
                     alt_parents=fields.get_alt_parents(field))
 
     @tornado.web.authenticated
@@ -371,14 +372,16 @@ class FormFieldEditDescr(FormMixin, RequestHandler):
         self.check_admin()
         form = self.get_entity(iuid, doctype=constants.FORM)
         with FormSaver(doc=form, rqh=self) as saver:
-            saver.fields[identifier]['label'] = \
-                self.get_argument("{0}/label".format(identifier), '')
+            name = "{0}/label".format(identifier)
+            saver.fields[identifier]['label'] = self.get_argument(name, '')
+            name = "{0}/initial_display".format(identifier)
+            saver.fields[identifier]['initial_display'] = \
+                utils.to_bool(self.get_argument(name, False))
+            name = "{0}/erase_on_clone".format(identifier)
             saver.fields[identifier]['erase_on_clone'] = \
-                utils.to_bool(
-                    self.get_argument("{0}/erase_on_clone".format(identifier),
-                                      False))
-            saver.fields[identifier]['description'] = \
-                self.get_argument("{0}/descr".format(identifier), '')
+                utils.to_bool(self.get_argument(name, False))
+            name = "{0}/descr".format(identifier)
+            saver.fields[identifier]['description'] = self.get_argument(name,'')
         self.see_other('form', form['_id'])
 
 
@@ -408,7 +411,7 @@ class FormPending(RequestHandler):
         self.check_admin()
         form = self.get_entity(iuid, doctype=constants.FORM)
         if form['status'] != constants.TESTING:
-            raise ValueError('form does not have status testing')
+            raise ValueError('Form does not have status testing.')
         with FormSaver(doc=form, rqh=self) as saver:
             saver['status'] = constants.PENDING
         view = self.db.view('order/form',
@@ -430,7 +433,7 @@ class FormTesting(RequestHandler):
         self.check_admin()
         form = self.get_entity(iuid, doctype=constants.FORM)
         if form['status'] != constants.PENDING:
-            raise ValueError('form does not have status pending')
+            raise ValueError('Form does not have status pending.')
         with FormSaver(doc=form, rqh=self) as saver:
             saver['status'] = constants.TESTING
         self.see_other('form', iuid)

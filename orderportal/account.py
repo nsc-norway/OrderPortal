@@ -49,6 +49,15 @@ class AccountSaver(saver.Saver):
         self.erase_password()
         self['code'] = utils.get_iuid()
 
+    def check_required(self):
+        "Check that required data is present. Raise ValueError otherwise."
+        if not self['first_name']:
+            raise ValueError('First name is required.')
+        if not self['last_name']:
+            raise ValueError('Last name is required.')
+        if not self['university']:
+            raise ValueError('University is required.')
+
 
 class Accounts(RequestHandler):
     "Accounts list page; just HTML, Datatables obtains data via API call."
@@ -148,6 +157,7 @@ class AccountsApiV1(_AccountsFilter):
     @tornado.web.authenticated
     def get(self):
         "JSON output."
+        URL = self.absolute_reverse_url
         self.check_staff()
         self.params = self.get_filter_params()
         accounts = self.get_accounts()
@@ -156,8 +166,8 @@ class AccountsApiV1(_AccountsFilter):
             item = OD()
             item['email'] = account['email']
             item['links'] = dict(
-                api=dict(href=self.reverse_url('account_api',account['email'])),
-                display=dict(href=self.reverse_url('account',account['email'])))
+                api=dict(href=URL('account_api',account['email'])),
+                display=dict(href=URL('account',account['email'])))
             name = last_name = account.get('last_name')
             first_name = account.get('first_name')
             if name:
@@ -183,21 +193,14 @@ class AccountsApiV1(_AccountsFilter):
             item['orders'] = dict(
                 count=account['order_count'],
                 links=dict(
-                    display=dict(
-                        href=self.reverse_url('account_orders',
-                                              account['email'])),
-                    api=dict(
-                        href=self.reverse_url('account_orders_api',
-                                              account['email']))))
+                    display=dict(href=URL('account_orders', account['email'])),
+                    api=dict(href=URL('account_orders_api', account['email']))))
             items.append(item)
         data = OD()
-        data['base'] = self.absolute_reverse_url('home')
         data['type'] = 'accounts'
         data['links'] = links = OD()
-        links['self'] = dict(
-            href=self.absolute_reverse_url('accounts_api', **self.params))
-        links['display'] = dict(
-            href=self.absolute_reverse_url('accounts', **self.params))
+        links['self'] = dict(href=URL('accounts_api', **self.params))
+        links['display'] = dict(href=URL('accounts', **self.params))
         data['items'] = items
         self.write(data)
 
@@ -215,8 +218,8 @@ class AccountsCsv(_AccountsFilter):
         writer = csv.writer(csvfile)
         writer.writerow(('Email', 'Last name', 'First name', 'Role', 'Status',
                          'Order count', 'University', 'Department', 'PI',
-                         'Gender', 'Subject', 'Address', 'Zip', 'City',
-                         'Country', 'Invoice ref', 'Invoice address',
+                         'Gender', 'Group size', 'Subject', 'Address', 'Zip',
+                         'City', 'Country', 'Invoice ref', 'Invoice address',
                          'Invoice zip', 'Invoice city', 'Invoice country',
                          'Phone', 'Other data', 'Latest login',
                          'Modified', 'Created'))
@@ -238,7 +241,8 @@ class AccountsCsv(_AccountsFilter):
                              utils.to_utf8(account.get('university') or ''),
                              utils.to_utf8(account.get('department') or ''),
                              account.get('pi') and 'yes' or 'no',
-                             account.get('gender') or '-',
+                             account.get('gender') or '',
+                             account.get('group_size') or '',
                              subject,
                              utils.to_utf8(addr.get('address') or ''),
                              utils.to_utf8(addr.get('zip') or ''),
@@ -274,7 +278,7 @@ class AccountMixin(object):
     def check_readable(self, account):
         "Check that the account is readable by the current user."
         if self.is_readable(account): return
-        raise ValueError('you may not read the account')
+        raise ValueError('You may not read the account.')
 
     def is_editable(self, account):
         "Is the account editable by the current user?"
@@ -285,7 +289,7 @@ class AccountMixin(object):
     def check_editable(self, account):
         "Check that the account is editable by the current user."
         if self.is_readable(account): return
-        raise ValueError('you may not edit the account')
+        raise ValueError('You may not edit the account.')
 
 
 class Account(AccountMixin, RequestHandler):
@@ -306,7 +310,9 @@ class Account(AccountMixin, RequestHandler):
                             descending=True,
                             limit=1)
         try:
-            latest_activity = list(view)[0].key[1]
+            key = list(view)[0].key
+            if key[0] != account['email']: raise IndexError
+            latest_activity = key[1]
         except IndexError:
             latest_activity = None
         if self.is_staff() or self.current_user['email'] == account['email']:
@@ -326,7 +332,7 @@ class Account(AccountMixin, RequestHandler):
             self.delete(email)
             return
         raise tornado.web.HTTPError(
-            405, reason='internal problem; POST only allowed for DELETE')
+            405, reason='Internal problem; POST only allowed for DELETE.')
 
     @tornado.web.authenticated
     def delete(self, email):
@@ -335,7 +341,7 @@ class Account(AccountMixin, RequestHandler):
         self.check_admin()
         if not self.is_deletable(account):
             self.see_other('account', account['email'],
-                           error='account cannot be deleted')
+                           error='Account cannot be deleted.')
             return
         # Delete the groups this account owns.
         view = self.db.view('group/owner',
@@ -384,13 +390,13 @@ class AccountApiV1(AccountMixin, RequestHandler):
 
     @tornado.web.authenticated
     def get(self, email):
+        URL = self.absolute_reverse_url
         try:
             account = self.get_account(email)
             self.check_readable(account)
         except ValueError, msg:
             raise tornado.web.HTTPError(403, reason=str(msg))
         data = OD()
-        data['base'] = self.absolute_reverse_url('home')
         data['type'] = 'account'
         data['email'] = account['email']
         name = last_name = account.get('last_name')
@@ -401,8 +407,8 @@ class AccountApiV1(AccountMixin, RequestHandler):
         else:
             name = first_name
         data['links'] = dict(
-            self=dict(href=self.reverse_url('account_api', account['email'])),
-            display=dict(href=self.reverse_url('account', account['email'])))
+            self=dict(href=URL('account_api', account['email'])),
+            display=dict(href=URL('account', account['email'])))
         data['name'] = name
         data['first_name'] = first_name
         data['last_name'] = last_name
@@ -410,6 +416,7 @@ class AccountApiV1(AccountMixin, RequestHandler):
         data['university'] = account['university']
         data['role'] = account['role']
         data['gender'] = account.get('gender')
+        data['group_size'] = account.get('group_size')
         data['status'] = account['status']
         data['address'] = account.get('address') or {}
         data['invoice_ref'] = account.get('invoice_ref')
@@ -427,10 +434,8 @@ class AccountApiV1(AccountMixin, RequestHandler):
             data['latest_activity'] = None
         data['orders'] = dict(
             count=self.get_account_order_count(account['email']),
-            display=dict(
-                href=self.reverse_url('account_orders', account['email'])),
-            api=dict(
-                href=self.reverse_url('account_orders_api', account['email'])))
+            display=dict(href=URL('account_orders', account['email'])),
+            api=dict(href=URL('account_orders_api', account['email'])))
         self.write(data)
 
 
@@ -447,7 +452,7 @@ class AccountOrdersMixin(object):
     def check_readable(self, account):
         "Check that the account is readable by the current user."
         if self.is_readable(account): return
-        raise ValueError('you may not view these orders')
+        raise ValueError('You may not view these orders.')
 
 
 class AccountOrders(AccountOrdersMixin, RequestHandler):
@@ -481,6 +486,7 @@ class AccountOrdersApiV1(AccountOrdersMixin,
     @tornado.web.authenticated
     def get(self, email):
         "JSON output."
+        URL = self.absolute_reverse_url
         try:
             account = self.get_account(email)
             self.check_readable(account)
@@ -488,15 +494,12 @@ class AccountOrdersApiV1(AccountOrdersMixin,
             raise tornado.web.HTTPError(403, reason=str(msg))
         # Get names and forms lookups
         names = self.get_account_names()
-        forms = dict([(f[1], f[0]) for f in self.get_forms(enabled=False)])
+        forms = dict([(f[1], f[0]) for f in self.get_forms(all=True)])
         data = OD()
-        data['base'] = self.absolute_reverse_url('home')
         data['type'] = 'account orders'
         data['links'] = dict(
-            self=dict(
-                href=self.reverse_url('account_orders_api', account['email'])),
-            display=dict(
-                href=self.reverse_url('account_orders', account['email'])))
+            self=dict(href=URL('account_orders_api', account['email'])),
+            display=dict(href=URL('account_orders', account['email'])))
         view = self.db.view('order/owner',
                             reduce=False,
                             include_docs=True,
@@ -537,6 +540,7 @@ class AccountGroupsOrdersApiV1(AccountOrdersMixin,
     @tornado.web.authenticated
     def get(self, email):
         "JSON output."
+        URL = self.absolute_reverse_url
         try:
             account = self.get_account(email)
             self.check_readable(account)
@@ -552,15 +556,12 @@ class AccountGroupsOrdersApiV1(AccountOrdersMixin,
             orders.extend([r.doc for r in view])
         # Get names and forms lookups
         names = self.get_account_names()
-        forms = dict([(f[1], f[0]) for f in self.get_forms(enabled=False)])
+        forms = dict([(f[1], f[0]) for f in self.get_forms(all=True)])
         data = OD()
-        data['base'] = self.absolute_reverse_url('home')
         data['type'] = 'account groups orders'
         data['links'] = dict(
-            self=dict(
-                href=self.reverse_url('account_orders_api', account['email'])),
-            display=dict(
-                href=self.reverse_url('account_orders', account['email'])))
+            self=dict(href=URL('account_orders_api', account['email'])),
+            display=dict(href=URL('account_orders', account['email'])))
         data['items'] = [self.get_json(o, names=names, forms=forms)
                          for o in orders]
         self.write(data)
@@ -632,53 +633,63 @@ class AccountEdit(AccountMixin, RequestHandler):
             account = self.get_account(email)
             self.check_editable(account)
         except ValueError, msg:
-            self.see_other('account', account['email'], error=str(msg))
+            self.see_other('account_edit', account['email'], error=str(msg))
             return
-        with AccountSaver(doc=account, rqh=self) as saver:
-            # Only admin may change role of an account.
-            if self.is_admin():
-                role = self.get_argument('role')
-                if role not in constants.ACCOUNT_ROLES:
-                    self.see_other('account_edit', account['email'],
-                                   error='invalid role')
-                    return
-                saver['role'] = role
-            saver['first_name'] = self.get_argument('first_name')
-            saver['last_name'] = self.get_argument('last_name')
-            university = self.get_argument('university_other', default=None)
-            if not university or 'unknown' in university:
-                university = self.get_argument('university', default=None)
-            saver['university'] = university or None
-            saver['department'] = self.get_argument('department', default=None)
-            saver['pi'] = utils.to_bool(self.get_argument('pi', default=False))
-            try:
-                saver['gender'] = self.get_argument('gender').lower()
-            except tornado.web.MissingArgumentError:
+        try:
+            with AccountSaver(doc=account, rqh=self) as saver:
+                # Only admin may change role of an account.
+                if self.is_admin():
+                    role = self.get_argument('role')
+                    if role not in constants.ACCOUNT_ROLES:
+                        raise ValueError('Invalid role.')
+                    saver['role'] = role
+                saver['first_name'] = self.get_argument('first_name')
+                saver['last_name'] = self.get_argument('last_name')
+                university = self.get_argument('university', None)
+                if not university:
+                    university = self.get_argument('university_other', None)
+                saver['university'] = university
+                saver['department'] = self.get_argument('department', None)
+                saver['pi'] = utils.to_bool(self.get_argument('pi', False))
                 try:
-                    del saver['gender']
-                except KeyError:
-                    pass
-            try:
-                saver['subject'] = int(self.get_argument('subject'))
-            except (tornado.web.MissingArgumentError, ValueError, TypeError):
-                saver['subject'] = None
-            saver['address'] = dict(
-                address=self.get_argument('address', default=None),
-                zip=self.get_argument('zip', default=None),
-                city=self.get_argument('city', default=None),
-                country=self.get_argument('country', default=None))
-            saver['invoice_ref'] = self.get_argument('invoice_ref',default=None)
-            saver['invoice_address'] = dict(
-                address=self.get_argument('invoice_address', default=None),
-                zip=self.get_argument('invoice_zip', default=None),
-                city=self.get_argument('invoice_city', default=None),
-                country=self.get_argument('invoice_country', default=None))
-            saver['phone'] = self.get_argument('phone', default=None)
-            saver['other_data'] = self.get_argument('other_data', default=None)
-            if utils.to_bool(self.get_argument('api_key', default=False)):
-                saver['api_key'] = utils.get_iuid()
-            saver['update_info'] = False
-        self.see_other('account', account['email'])
+                    saver['gender'] = self.get_argument('gender').lower()
+                except tornado.web.MissingArgumentError:
+                    try:
+                        del saver['gender']
+                    except KeyError:
+                        pass
+                try:
+                    saver['group_size'] = self.get_argument('group_size')
+                except tornado.web.MissingArgumentError:
+                    try:
+                        del saver['group_size']
+                    except KeyError:
+                        pass
+                try:
+                    saver['subject'] = int(self.get_argument('subject'))
+                except (tornado.web.MissingArgumentError, ValueError,TypeError):
+                    saver['subject'] = None
+                saver['address'] = dict(
+                    address=self.get_argument('address', None),
+                    zip=self.get_argument('zip', None),
+                    city=self.get_argument('city', None),
+                    country=self.get_argument('country', None))
+                saver['invoice_ref'] = self.get_argument('invoice_ref', None)
+                saver['invoice_address'] = dict(
+                    address=self.get_argument('invoice_address', None),
+                    zip=self.get_argument('invoice_zip', None),
+                    city=self.get_argument('invoice_city', None),
+                    country=self.get_argument('invoice_country', None))
+                saver['phone'] = self.get_argument('phone', None)
+                saver['other_data'] = self.get_argument('other_data', None)
+                if utils.to_bool(self.get_argument('api_key', False)):
+                    saver['api_key'] = utils.get_iuid()
+                saver['update_info'] = False
+                saver.check_required()
+        except ValueError, msg:
+            self.see_other('account_edit', account['email'], error=str(msg))
+        else:
+            self.see_other('account', account['email'])
 
 
 class Login(RequestHandler):
@@ -698,13 +709,13 @@ class Login(RequestHandler):
         except tornado.web.MissingArgumentError:
             self.see_other('home', error='Missing email or password argument.')
             return
-        msg = 'No such account or invalid password.'
+        msg = 'Sorry, no such account or invalid password.'
         try:
             account = self.get_account(email)
         except ValueError, msg:
             self.see_other('home', error=str(msg))
             return
-        if not utils.hashed_password(password) == account.get('password'):
+        if utils.hashed_password(password) != account.get('password'):
             utils.log(self.db, self, account,
                       changed=dict(login_failure=account['email']))
             view = self.db.view('log/login_failure',
@@ -774,6 +785,7 @@ class Reset(RequestHandler):
         self.render('reset.html', email=self.get_argument('account', ''))
 
     def post(self):
+        URL = self.absolute_reverse_url
         try:
             account = self.get_account(self.get_argument('email'))
         except (tornado.web.MissingArgumentError, ValueError):
@@ -798,12 +810,11 @@ class Reset(RequestHandler):
                 with MessageSaver(rqh=self) as saver:
                     saver.set_params(
                         account=account['email'],
-                        url=self.absolute_reverse_url('password'),
-                        password_url=self.absolute_reverse_url('password'),
-                        password_code_url=self.absolute_reverse_url(
-                            'password',
-                            email=account['email'],
-                            code=account['code']),
+                        url=URL('password'),
+                        password_url=URL('password'),
+                        password_code_url=URL('password',
+                                              email=account['email'],
+                                              code=account['code']),
                         code=account['code'])
                     saver.set_template(template)
                     saver['recipients'] = [account['email']]
@@ -862,17 +873,30 @@ class Password(RequestHandler):
             self.see_other('account_edit', account['email'],
                            message='Please review and update your account information.')
         else:
-            self.redirect(self.reverse_url('home'))
+            self.see_other('home')
 
 
 class Register(RequestHandler):
     "Register a new account account."
 
+    KEYS = ['email', 'first_name', 'last_name',
+            'university', 'department', 'pi',
+            'gender', 'group_size', 'subject',
+            'invoice_ref', 'phone']
+    ADDRESS_KEYS = ['address', 'zip', 'city', 'country']
+
     def get(self):
         if not self.global_modes['allow_registration']:
             self.see_other('home', error='Registration is currently disabled.')
             return
-        self.render('register.html')
+        values = OD()
+        for key in self.KEYS:
+            values[key] = self.get_argument(key, None)
+        for key in self.ADDRESS_KEYS:
+            values[key] = self.get_argument(key, None)
+        for key in self.ADDRESS_KEYS:
+            values['invoice_' + key] = self.get_argument('invoice_' + key, None)
+        self.render('register.html', values=values)
 
     def post(self):
         if not self.global_modes['allow_registration']:
@@ -880,52 +904,55 @@ class Register(RequestHandler):
             return
         try:
             with AccountSaver(rqh=self) as saver:
-                try:
-                    email = self.get_argument('email')
-                    saver.set_email(email)
-                    saver['first_name'] = self.get_argument('first_name')
-                    saver['last_name'] = self.get_argument('last_name')
-                    university = self.get_argument('university_other',
-                                                   default=None)
-                    if not university:
-                        university = self.get_argument('university',
-                                                       default=None)
-                    saver['university'] = university or None
-                except tornado.web.MissingArgumentError, msg:
-                    raise ValueError(msg)
+                email = self.get_argument('email', None)
+                saver['first_name'] = self.get_argument('first_name', None)
+                saver['last_name'] = self.get_argument('last_name', None)
+                university = self.get_argument('university', None)
+                if not university:
+                    university = self.get_argument('university_other', None)
+                saver['university'] = university
                 saver['department'] = self.get_argument('department', None)
                 saver['pi'] = utils.to_bool(self.get_argument('pi', False))
-                try:
-                    saver['gender'] = self.get_argument('gender').lower()
-                except tornado.web.MissingArgumentError:
-                    try:
-                        del saver['gender']
-                    except KeyError:
-                        pass
+                gender = self.get_argument('gender', None)
+                if gender:
+                    saver['gender'] = gender.lower()
+                group_size = self.get_argument('group_size', None)
+                if group_size:
+                    saver['group_size'] = group_size
                 try:
                     saver['subject'] = int(self.get_argument('subject'))
                 except (tornado.web.MissingArgumentError,ValueError,TypeError):
                     saver['subject'] = None
                 saver['address'] = dict(
-                    address=self.get_argument('address', default=None),
-                    zip=self.get_argument('zip', default=None),
-                    city=self.get_argument('city', default=None),
-                    country=self.get_argument('country', default=None))
-                saver['invoice_ref'] = self.get_argument('invoice_ref',default=None)
+                    address=self.get_argument('address', None),
+                    zip=self.get_argument('zip', None),
+                    city=self.get_argument('city', None),
+                    country=self.get_argument('country', None))
+                saver['invoice_ref'] = self.get_argument('invoice_ref', None)
                 saver['invoice_address'] = dict(
-                    address=self.get_argument('invoice_address', default=None),
-                    zip=self.get_argument('invoice_zip', default=None),
-                    city=self.get_argument('invoice_city', default=None),
-                    country=self.get_argument('invoice_country', default=None))
-                if not saver['invoice_address'].get('address'):
-                    saver['invoice_address'] = saver['address'].copy()
-                saver['phone'] = self.get_argument('phone', default=None)
+                    address=self.get_argument('invoice_address', None),
+                    zip=self.get_argument('invoice_zip', None),
+                    city=self.get_argument('invoice_city', None),
+                    country=self.get_argument('invoice_country', None))
+                saver['phone'] = self.get_argument('phone', None)
+                if not email:
+                    raise ValueError('Email is required.')
+                saver.set_email(email)
                 saver['owner'] = saver['email']
                 saver['role'] = constants.USER
                 saver['status'] = constants.PENDING
+                saver.check_required()
                 saver.erase_password()
         except ValueError, msg:
-            self.see_other('home', error=str(msg))
+            kwargs = OD()
+            for key in self.KEYS:
+                kwargs[key] = saver.get(key) or ''
+            for key in self.ADDRESS_KEYS:
+                kwargs[key] = saver.get('address', {}).get(key) or ''
+            for key in self.ADDRESS_KEYS:
+                kwargs['invoice_' + key] = saver.get('invoice_address', {}).\
+                    get(key) or ''
+            self.see_other('register', error=str(msg), **kwargs)
             return
         # Prepare message sent by cron job script 'script/messenger.py'
         try:

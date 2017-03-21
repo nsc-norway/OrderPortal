@@ -30,7 +30,7 @@
       </div>
     </div>
     <span class="help-block">
-      Parent group for the field. Cannot be changed.
+      Parent group for the field. May be edited later.
     </span>
   </div>
 
@@ -57,6 +57,7 @@
       Identifier for the field, which must be unique within this
       form. It must contain only alphanumerical characters and
       underscore; no blanks! It is case sensitive. Cannot be changed.
+      <br>
       The pull-down menu contains all identifiers in other enabled forms,
       to help make forms more coherent.
     </span
@@ -70,8 +71,8 @@
       </div>
     </div>
     <span class="help-block">
-      Label to display for the field in the order form. The identifier
-      will be used if this is not provided.
+      Label to display for the field in the {{ term('order') }} form.
+      The identifier will be used if this is not provided.
     </span>
   </div>
 
@@ -95,16 +96,26 @@
 
   <div class="form-group visible-if"
        data-if-id="type"
-       data-if-val="select">
+       data-if-val="group">
     <div class="row">
-      <div class="col-md-3">
-	<label class="control-label" for="select">Select</label>
-	<textarea class="form-control" name="select" rows="4"></textarea>
+      <div class="col-md-6">
+	<label class="control-label" for="initial_display">
+	  Initial display
+	</label>
+	<div class="checkbox">
+	  <label>
+	    <input type="checkbox"
+		   name="initial_display"
+		   id="initial_display"
+		   value="yes">
+	    Yes
+	  </label>
+	</div>
       </div>
     </div>
     <span class="help-block">
-      Values to select among. One per line. The first value is the
-      default. May be edited later.
+      The group's fields are shown already when the page is
+      opened. This is used only for groups at the top level.
     </span>
   </div>
 
@@ -113,17 +124,75 @@
        data-if-val="select">
     <div class="row">
       <div class="col-md-3">
+	<label class="control-label" for="select">Select values</label>
+	<textarea class="form-control" name="select" rows="4"></textarea>
+      </div>
+    </div>
+    <span class="help-block">
+      One value per line. A label for a group of options is denoted
+      by a leading dash '-'; this is just a group label, and not an
+      option in itself. May be edited later.
+    </span>
+  </div>
+
+  <div class="form-group visible-if"
+       data-if-id="type"
+       data-if-val="select">
+    <div class="row">
+      <div class="col-md-4">
 	<label class="control-label" for="display">Display</label>
-	<div>
-	  <label class="radio-inline">
-	    <input type="radio" name="display" value="menu" checked>Menu</label>
-	  <label class="radio-inline">
-	    <input type="radio" name="display" value="radio">Radio buttons</label>
+	<div class="radio">
+	  <label>
+	    <input type="radio" name="display" value="menu" checked>Menu
+	  </label>
+	</div>
+	<div class="radio">
+	  <label>
+	    <input type="radio" name="display" value="radio">
+	    Radio buttons, on the same line
+	  </label>
+	</div>
+	<div class="radio">
+	  <label>
+	    <input type="radio" name="display" value="radio-newline">
+	    Radio buttons, one per line
+	  </label>
 	</div>
       </div>
     </div>
     <span class="help-block">
-      Display element to use for the field.
+      Type of display to use for the select field.
+    </span>
+  </div>
+
+  <div class="form-group visible-if"
+       data-if-id="type"
+       data-if-val="multiselect">
+    <div class="row">
+      <div class="col-md-3">
+	<label class="control-label" for="multiselect">Multiselect values</label>
+	<textarea class="form-control" name="multiselect" rows="4"></textarea>
+      </div>
+    </div>
+    <span class="help-block">
+      One value per line. A label for a group of options is denoted
+      by a leading dash '-'; this is just a group label, and not an
+      option in itself. May be edited later.
+    </span>
+  </div>
+
+  <div class="form-group visible-if"
+       data-if-id="type"
+       data-if-val="table">
+    <div class="row">
+      <div class="col-md-3">
+	<label class="control-label" for="table">Table column headers</label>
+	<textarea class="form-control" name="table" rows="4"></textarea>
+      </div>
+    </div>
+    <span class="help-block">
+      One identifier per row to specify one column in the resulting table.
+      May be edited later.
     </span>
   </div>
 
@@ -139,9 +208,9 @@
       </div>
     </div>
     <span class="help-block">
-      Require that the field must have a value specified in the order.
-      If no value, then the order is incomplete, which means it cannot
-      be submitted.
+      Require that the field must have a value specified in the
+      {{ term('order') }}. If no value, then the {{ term('order') }}
+      is incomplete, which means it cannot be submitted.
     </span>
   </div>
 
@@ -163,7 +232,7 @@
       </div>
     </div>
     <span class="help-block">
-      The field is restricted to be visible only to staff, not the user.
+      The field is not visible to the user, only to admin and staff.
     </span>
   </div>
 
@@ -185,8 +254,7 @@
       </div>
     </div>
     <span class="help-block">
-      The field is restricted to be editable only by staff, not the
-      user. Note that it is visible to the user.
+      The field visible to the users, but can be edited only by admin and staff.
     </span>
   </div>
  
@@ -208,7 +276,7 @@
       </div>
     </div>
     <span class="help-block">
-      Erase the value of the field in a new order when cloning.
+      Erase the value of the field in a new {{ term('order') }} when cloning.
       This has no effect on fields of type 'group'.
     </span>
   </div>
@@ -221,8 +289,8 @@
       </div>
     </div>
     <span class="help-block">
-      Description to display in the order to help the user fill in the
-      field correctly, using
+      Description to display in the {{ term('order') }} to help
+      the user fill in the field correctly, using
       <a href="{{ settings['MARKDOWN_URL'] }}" target="_blank">Markdown</a>
       format.
     </span>

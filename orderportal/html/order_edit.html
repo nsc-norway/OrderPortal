@@ -2,8 +2,8 @@
 
 {% extends "base.html" %}
 
-{% block head_title %}Edit order '{{ order['title'] }}'{% end %}
-{% block body_title %} Edit order '{{ order['title'] }}'{% end %}
+{% block head_title %}Edit {{ term('order') }} '{{ order['title'] }}'{% end %}
+{% block body_title %}Edit {{ term('order') }} '{{ order['title'] }}'{% end %}
 
 {% block content %}
 <h3>{{ form['title'] }}</h3>
@@ -11,8 +11,10 @@
 <div class="row">
   <div class="col-md-10">
     <span class="help-block">
-      You may save incomplete orders. However, partially filled-in
-      orders cannot be submitted.
+      You may save incomplete {{ term('orders') }}, but only complete
+      {{ term('orders') }} can be submitted.
+      <a href="{{ settings['MARKDOWN_URL'] }}" target="_blank">Markdown</a>
+      notation can be used in multi-line text input fields.
     </span>
   </div>
   <div class="col-md-2">
@@ -33,6 +35,7 @@
 <form action="{{ reverse_url('order_edit', order['_id']) }}"
       class="myForm"
       role="form"
+      enctype="multipart/form-data"
       method="POST">
   {% module xsrf_form_html() %}
 
@@ -48,15 +51,18 @@
       </div>
     </div>
     <span class="help-block">
-      Brief, descriptive title for the order. It is not required to
-      be unique, but it is a good idea to make it so anyway.
+      Brief, descriptive title for the {{ term('order') }}.
+      It is not required to be unique, but it is a good idea
+      to make it so anyway.
     </span>
   </div>
 
+  {% if is_staff or settings.get('ORDER_USER_TAGS') %}
   <div class="form-group">
     <div class="row">
       <div class="col-md-9">
-	<label class="control-label" for="__tags__">Tags</label>
+	<label class="control-label" for="__tags__">Keywords</label>
+	{# A user was confused by terminology. No change in the code. #}
 	{% if is_staff %}
 	{% set tags = order.get('tags', []) %}
 	{% else %}
@@ -68,15 +74,17 @@
       </div>
     </div>
     <span class="help-block">
-      Tags characterizing the order. Must be formatted as identifiers,
-      i.e. start with a letter, continue with letters, digits and/or
-      underscore; no blanks allowed.
+      Optional keywords (tags) characterizing the {{ term('order') }}.
+      Format as identifiers, i.e. start with a letter, continue with letters,
+      digits and/or underscore; no blanks allowed.
+      <br>
+      More than one tag is allowed using comma ',' as delimiter.
       {% if is_staff %}
       Staff may use namespace prefixes, e.g. "project_id:P12345".
       {% end %}
-      More than one tag is allowed using comma ',' as delimiter.
     </span>
   </div>
+  {% end %} {#if is_staff or settings.get('ORDER_USER_TAGS') #}
 
   <div class="form-group">
     <div class="row">
@@ -98,18 +106,27 @@
     </div>
     <span class="help-block">
       {% if is_admin %}
-      The order's owner specified by email address. May be changed to
-      another account.
+      The {{ term('order') }}'s owner specified by email address.
+      May be changed to another account.
       {% else %}
-      The order's owner may be changed to an account in your groups.
+      The {{ term('order') }}'s owner may be changed to an account
+      in your groups.
       <strong>NOTE:</strong>
-      You will then no longer be able to edit the order.
+      You will then no longer be able to edit the {{ term('order') }}.
       {% end %}
     </span>
   </div>
 
   {# Recursion: 'include' cannot be used! #}
-  {% module Template('order_edit_fields.html', fields=fields, order=order, is_staff=is_staff) %}
+  {% module Template('order_edit_fields.html', fields=fields, order=order, is_staff=is_staff, hidden_fields=hidden_fields) %}
+
+  <div>
+    {# Fields must be allowed to influence others, even when hidden. #}
+    {% for f in hidden_fields %}
+    <input type="hidden" class="visible-if-source"
+	   name="{{ f }}" id="{{ f }}" value="{{ order['fields'].get(f)  or '' }}">
+    {% end %}
+  </div>
 
   {% include 'order_edit_save.html' %}
 </form>

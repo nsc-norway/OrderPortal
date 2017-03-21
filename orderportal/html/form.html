@@ -53,7 +53,7 @@
     <input type="hidden" name="form" value="{{ form['_id'] }}">
     <button type="submit" class="btn btn-success">
       <span class="glyphicon glyphicon-plus"></span>
-      Create order
+      Create {{ term('order') }}
     </button>
   </form>
 </p>
@@ -77,7 +77,7 @@
     <input type="hidden" name="form" value="{{ form['_id'] }}">
     <button type="submit" class="btn btn-success">
       <span class="glyphicon glyphicon-plus"></span>
-      Create order
+      Create {{ term('order') }}
     </button>
   </form>
 </p>
@@ -88,7 +88,7 @@
     {% module xsrf_form_html() %}
     <button type="submit"
 	    class="btn btn-default"
-	    onclick="return confirm('Orders will not be creatable from this form. Cannot be undone! Really disable?');">
+	    onclick="return confirm('Cannot be undone! Really disable?');">
       {% module Icon('disabled') %}
       Disable
     </button>
@@ -145,7 +145,7 @@
 	<td>{{ form.get('version') or '-' }}</td>
       </tr>
       <tr>
-	<th>Orders</th>
+	<th>{{ term('Orders') }}</th>
 	<td>
 	  <a class="badge"
 	     href="{{ reverse_url('form_orders', form['_id']) }}">
@@ -224,9 +224,19 @@
 	  {% if field['type'] == constants.SELECT %}
 	  ({{ field.get('display') or 'menu' }})
 	  <pre>{{ '\n'.join(field.get('select') or []) }}</pre>
+	  {% elif field['type'] == constants.MULTISELECT %}
+	  <pre>{{ '\n'.join(field.get('multiselect') or []) }}</pre>
+	  {% elif field['type'] == constants.TABLE %}
+	  <pre>{{ '\n'.join(field.get('table') or []) }}</pre>
+	  {% end %}
+	  {% if field.get('processor') %}
+	  <br><em>{{ field.get('processor') }}</em>
 	  {% end %}
 	</td>
 	<td>
+	  {% if field.get('initial_display') %}
+	  <em>initial</em><br>
+	  {% end %}
 	  {% set identifier = field.get('visible_if_field') %}
 	  {% if identifier %}
 	  if {{ identifier }} == '{{ field.get("visible_if_value") }}'
@@ -262,7 +272,7 @@
 	    </button>
 	  </form>
 	{% else %}
-	{# Allow edit of label, clone erase, description when not editable. #}
+	{# Allow edit of non-data properties when not editable. #}
 	  <button type="button" class="btn btn-primary btn-xs"
 		  data-toggle="modal" data-target="#{{ field['identifier'] }}">
 	    <span class="glyphicon glyphicon-edit"></span>
@@ -296,8 +306,10 @@
 	      role="form"
 	      method="POST">
 	  {% module xsrf_form_html() %}
+
 	  <div class="form-group">
-	    <label class="control-label" for="{{ field['identifier'] }}/label">
+	    <label class="control-label"
+		   for="{{ field['identifier'] }}/label">
 	      Label
 	    </label>
 	    <input class="form-control"
@@ -305,12 +317,14 @@
 		   id="{{ field['identifier'] }}/label"
 		   value="{{ field.get('label') or '' }}">
 	    <span class="help-block">
-	      Label to display for the field in the order form. The
-	      identifier will be used if this is not provided.
+	      Label to display for the field in the {{ term('order') }} form.
+	      The identifier will be used if this is not provided.
 	    </span>
 	  </div>
+
 	  <div class="form-group">
-	    <label class="control-label" for="{{ field['identifier'] }}/erase_on_clone">
+	    <label class="control-label"
+		   for="{{ field['identifier'] }}/erase_on_clone">
 	      Erase on clone
 	    </label>
 	    <div class="checkbox">
@@ -320,10 +334,35 @@
 		       id="{{ field['identifier'] }}/erase_on_clone"
 		       value="true"
 		       {{ field.get('erase_on_clone') and 'checked' or ''}}>
-		Erase the value of the field in a new order when cloning.
+		Erase the value of the field in a new {{ term('order') }}
+		when cloning.
 	      </label>
 	    </div>
 	  </div>
+
+	  {% if field['type'] == constants.GROUP %}
+	  <div class="form-group">
+	    <label class="control-label"
+		   for="{{ field['identifier'] }}/initial_display">
+	      Initial display
+	    </label>
+	    <div class="checkbox">
+	      <label>
+		<input type="checkbox"
+		       name="{{ field['identifier'] }}/initial_display"
+		       id="{{ field['identifier'] }}/initial_display"
+		       value="yes"
+		       {{ field.get('initial_display') and 'checked' or '' }}>
+		Yes
+	      </label>
+	      <span class="help-block">
+		The group's fields are shown already when the page is
+		opened. This is used only for groups at the top level.
+	      </span>
+	    </div>
+	  </div>
+	  {% end %}
+
 	  <div class="form-group">
 	    <label class="control-label" for="{{ field['identifier'] }}/descr">
 	      Description
@@ -333,8 +372,8 @@
 		      id="{{ field['identifier'] }}/descr"
 		      >{{ field.get('description') or '' }}</textarea>
 	    <span class="help-block">
-	      Description to display in the order to help the user
-	      fill in the field correctly, using
+	      Description to display in the {{ term('order') }}
+	      to help the user fill in the field correctly, using
 	      <a href="{{ settings['MARKDOWN_URL'] }}">Markdown</a>
 	      format.
 	    </span>

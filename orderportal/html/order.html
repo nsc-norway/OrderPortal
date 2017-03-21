@@ -1,6 +1,6 @@
 {# Order page. #}
 
-{% block head_title %}Order: {{ order['title'] }}{% end %}
+{% block head_title %}{{ term('Order') }}: {{ order['title'] }}{% end %}
 
 {% block body_title %}
 {% module Icon('order', label=True) %}: {{ order['title'] }}
@@ -9,12 +9,15 @@
 {% extends "base.html" %}
 
 {% block body_header_meta %}
-<a href="{{ reverse_url('order_api', order['_id']) }}">
+<a href="{{ order_reverse_url(order, api=True) }}">
   {% module Icon('json') %} JSON
 </a>
-<a href="{{ reverse_url('order_api', order['_id']) }}?full=true">
-  {% module Icon('json') %} Export
+{% if is_admin %}
+<a href="https://portal.sequencing.uio.no/nsc/package/{{ order['_id'] }}">
+	{% module Icon('json') %}
+	Package
 </a>
+{% end %}
 {% end %}
 
 {% block meta_content %}
@@ -46,7 +49,7 @@
 {% elif not global_modes['allow_order_editing'] %}
 <p>
   <div class="well text-danger">
-    Order editing is currently disabled.
+    {{ term('Order') }} editing is currently disabled.
   </div>
 </p>
 {% end %} {# if is_editable #}
@@ -66,13 +69,13 @@
 {% elif not global_modes['allow_order_creation'] %}
 <p>
   <div class="well text-danger">
-    Order creation is currently disabled.
+    {{ term('Order') }} creation is currently disabled.
   </div>
 </p>
 {% else %}
 <p>
   <div class="well">
-    This order cannot be cloned.
+    This {{ term('order') }} cannot be cloned.
   </div>
 <p>
 {% end %} {# if is_clonable #}
@@ -89,10 +92,7 @@
     {% module xsrf_form_html() %}
     <p>
       <button type="submit" class="btn btn-lg btn-success btn-block"
-	      {% if not is_admin %}
-	      onclick="return confirm('Cannot be undone! Really change status?');"
-	      {% end %}
-	      >
+	      onclick="return confirm('Cannot be undone! Really change status to \'{{ target['identifier'] }}\'?');">
 	{% module Icon(target['identifier']) %}
 	{{ target.get('action', target['identifier']) }}
       </button>
@@ -102,10 +102,15 @@
   {% else %}
   {% if order['invalid'] or not order.get('samples_valid') %}
   <div class="well well-lg text-danger">
-    Order cannot be submitted due to invalid or missing values.
+    {{ term('Order') }} cannot be submitted due to invalid or missing values.
   </div>
   {% end %}
   {% end %} {# if targets #}
+  {% if not global_modes.get('allow_order_submission', True) %}
+  <div class="well well-lg text-danger">
+    {{ term('Order') }} submission is currently disabled.
+  </div>
+  {% end %} {# if not global_modes... #}
 </p>
 {% end %} {# block meta_content #}
 
@@ -123,7 +128,7 @@
 
       {% if is_admin %}
       <tr>
-	<th>Order form</th>
+	<th>{{ term('Order') }} form</th>
 	<td>
 	  <a href="{{ reverse_url('form', form['_id']) }}">
 	    {{ form['title'] }}
@@ -148,8 +153,10 @@
 	  ({{ status['description'] }})
 	</td>
       </tr>
+      {% if is_staff or settings.get('ORDER_USER_TAGS') %}
       <tr>
-	<th>Tags</th>
+	<th>Keywords</th>
+	{# A user was confused by terminology. No change in code. #}
 	<td>
 	  {% set tags = order.get('tags', []) %}
 	  {% for tag in tags %}
@@ -157,6 +164,7 @@
 	  {% end %}
 	</td>
       </tr>
+      {% end %} {#if is_staff or settings.get('ORDER_USER_TAGS') #}
       <tr>
 	<th>History</th>
 	<td>
@@ -221,7 +229,13 @@
 		</a>
 	      </td>
 	      <td>{{ file['content_type'] }}</td>
-	      <td>{{ int(0.5 + file['size'] / 1000.0) }} kB</td>
+	      <td>
+		{% if file['size'] < 1000 %}
+		  {{ file['size'] }} B
+		{% else %}
+		  {{ int(0.5 + file['size'] / 1000.0) }} kB</td>
+		{% end %}
+              {% if is_attachable %}
 	      <td>
 		<form action="{{ reverse_url('order_file', order['_id'], file['filename']) }}"
 		      role="form"
@@ -235,8 +249,9 @@
 		  </button>
 		</form>
 	      </td>
+	      {% end %} {# if is_attachable #}
 	    </tr>
-	    {% end %}
+	    {% end %} {# for file in attached_files #}
 	  </table>
 	  {% if is_attachable %}
 	  <button type="button" class="btn btn-primary"
@@ -244,7 +259,7 @@
 	    <span class="glyphicon glyphicon-paperclip"></span>
 	    Attach
 	  </button>
-	  {% end %}
+	  {% end %} {# if is_attachable #}
 	</td>
       </tr>
     </table>
@@ -280,7 +295,7 @@
 	    <label for="file">File</label>
 	    <input type="file" name="file" class="form-control">
 	    <span class="help-block">
-	      The file to upload and attach to the order.
+	      The file to upload and attach to the {{ term('order') }}.
 	    </span>
 	  </div>
 

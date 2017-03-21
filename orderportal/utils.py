@@ -12,6 +12,7 @@ import os
 import socket
 import sys
 import time
+import traceback
 import unicodedata
 import urllib
 import urlparse
@@ -24,6 +25,7 @@ import yaml
 import orderportal
 from . import constants
 from . import settings
+from .processors.baseprocessor import BaseProcessor
 
 
 def get_command_line_parser(usage='usage: %prog [options]', description=None):
@@ -37,15 +39,12 @@ def get_command_line_parser(usage='usage: %prog [options]', description=None):
     parser.add_option('-p', '--pidfile',
                       action='store', dest='pidfile', default=None,
                       metavar="FILE", help="filename of file containing PID")
-    parser.add_option('-v', '--verbose',
-                      action="store_true", dest="verbose", default=False,
-                      help='verbose output of actions taken')
     parser.add_option('-f', '--force',
                       action="store_true", dest="force", default=False,
                       help='force action, rather than ask for confirmation')
     return parser
 
-def load_settings(filepath=None, verbose=False, pidfile=None):
+def load_settings(filepath=None):
     """Load and return the settings from the file path given by
     1) the argument to this procedure,
     2) the environment variable ORDERPORTAL_SETTINGS,
@@ -53,31 +52,26 @@ def load_settings(filepath=None, verbose=False, pidfile=None):
     Raise ValueError if no settings file was given.
     Raise IOError if settings file could not be read.
     Raise KeyError if a settings variable is missing.
-    Raise ValueError if the settings variable value is invalid.
+    Raise ValueError if a settings variable value is invalid.
     """
     if not filepath:
         filepath = os.environ.get('ORDERPORTAL_SETTINGS')
     if not filepath:
-        basedir = constants.ROOT
         hostname = socket.gethostname().split('.')[0]
+        basedir = os.path.dirname(__file__)
         for filepath in [os.path.join(basedir, "{0}.yaml".format(hostname)),
                          os.path.join(basedir, 'default.yaml')]:
             if os.path.exists(filepath) and os.path.isfile(filepath):
                 break
         else:
-            raise ValueError('no settings file specified')
-    if verbose:
-        print('settings from', filepath, file=sys.stderr)
+            raise ValueError('No settings file specified.')
+    # Read the settings file, updating the defaults
     with open(filepath) as infile:
         settings.update(yaml.safe_load(infile))
     settings['SETTINGS_FILEPATH'] = filepath
-    # Set ROOT if defined
-    try:
-        constants.ROOT = settings['ROOT']
-        os.chdir(constants.ROOT)
-    except KeyError:
-        pass
-    # Expand environment variables, ROOT and SITE_DIR, once and for all
+    # Set ROOT as the current working dir
+    os.chdir(settings['ROOT'])
+    # Expand environment variables (ROOT, SITE_DIR) once and for all
     for key, value in settings.items():
         if isinstance(value, (str, unicode)):
             settings[key] = expand_filepath(value)
@@ -99,14 +93,40 @@ def load_settings(filepath=None, verbose=False, pidfile=None):
     except KeyError:
         pass
     logging.basicConfig(**kwargs)
+    logging.info("OrderPortal version %s", orderportal.__version__)
+    logging.info("settings from %s", settings['SETTINGS_FILEPATH'])
+    if settings['LOGGING_DEBUG']:
+        logging.info('logging debug')
+    if settings['TORNADO_DEBUG']:
+        logging.info('tornado debug')
     # Check settings
     for key in ['BASE_URL', 'DB_SERVER', 'COOKIE_SECRET', 'DATABASE']:
         if key not in settings:
-            raise KeyError("no settings['{0}'] item".format(key))
+            raise KeyError("No settings['{0}'] item.".format(key))
         if not settings[key]:
-            raise ValueError("settings['{0}'] has invalid value".format(key))
+            raise ValueError("settings['{0}'] has invalid value.".format(key))
     if len(settings.get('COOKIE_SECRET', '')) < 10:
-        raise ValueError("settings['COOKIE_SECRET'] not set, or too short")
+        raise ValueError("settings['COOKIE_SECRET'] not set, or too short.")
+    # Load processor modules and the classes in them
+    paths = settings.get('PROCESSORS', [])
+    settings['PROCESSORS'] = {}
+    for path in paths:
+        try:
+            fromlist = '.'.join(path.split('.')[:-1])
+            module = __import__(path, fromlist=fromlist)
+        except:
+            logging.error("could not import processor module %s\n%s",
+                          path,
+                          traceback.format_exc(limit=20))
+        else:
+            for name in dir(module):
+                entity = getattr(module, name)
+                if isinstance(entity, type) and \
+                   issubclass(entity, BaseProcessor) and \
+                   entity != BaseProcessor:
+                    name = entity.__module__ + '.' + entity.__name__
+                    settings['PROCESSORS'][name] = entity
+                    logging.info("loaded processor %s", name)
     # Read order state definitions and transitions
     with open(settings['ORDER_STATUSES_FILEPATH']) as infile:
         settings['ORDER_STATUSES'] = yaml.safe_load(infile)
@@ -114,12 +134,12 @@ def load_settings(filepath=None, verbose=False, pidfile=None):
     initial = None
     for status in settings['ORDER_STATUSES']:
         if status['identifier'] in lookup:
-            raise ValueError("order status '%s' multiple definitions" %
+            raise ValueError("Order status '%s' multiple definitions." %
                              status['identifier'])
         lookup[status['identifier']] = status
         if status.get('initial'): initial = status
     if not initial:
-        raise ValueError('no initial order status defined')
+        raise ValueError('No initial order status defined.')
     settings['ORDER_STATUS_INITIAL'] = initial
     with open(settings['ORDER_TRANSITIONS_FILEPATH']) as infile:
         settings['ORDER_TRANSITIONS'] = yaml.safe_load(infile)
@@ -159,12 +179,12 @@ def load_settings(filepath=None, verbose=False, pidfile=None):
         filepath = settings['COUNTRY_CODES_FILEPATH']
         if not filepath: raise KeyError
     except KeyError:
-        settings['countries'] = []
+        settings['COUNTRIES'] = []
     else:
         with open(filepath) as infile:
-            settings['countries'] = yaml.safe_load(infile)
-        settings['countries_lookup'] = dict([(c['code'], c['name'])
-                                             for c in settings['countries']])
+            settings['COUNTRIES'] = yaml.safe_load(infile)
+        settings['COUNTRIES_LOOKUP'] = dict([(c['code'], c['name'])
+                                             for c in settings['COUNTRIES']])
     # Read subject terms
     try:
         filepath = settings['SUBJECT_TERMS_FILEPATH']
@@ -188,10 +208,21 @@ def load_settings(filepath=None, verbose=False, pidfile=None):
         elif parts.scheme == 'https':
             settings['PORT'] =  443
         else:
-            raise ValueError('could not determine port from BASE_URL')
+            raise ValueError('Could not determine port from BASE_URL.')
+
+def term(word):
+    "Return the display term for the given word. Use itself by default."
+    try:
+        istitle = word.istitle()
+        word = settings['TERMS'][word.lower()]
+    except KeyError:
+        pass
+    else:
+        if istitle: word = word.title()
+    return word
 
 def expand_filepath(filepath):
-    "Expand environment variables, the ROOT and SITE_DIR in filepaths."
+    "Expand environment variables (ROOT and SITE_DIR) in filepaths."
     filepath = os.path.expandvars(filepath)
     old = None
     while filepath != old:
@@ -200,7 +231,7 @@ def expand_filepath(filepath):
             filepath = filepath.replace('{SITE_DIR}', settings['SITE_DIR'])
         except KeyError:
             pass
-        filepath = filepath.replace('{ROOT}', constants.ROOT)
+        filepath = filepath.replace('{ROOT}', settings['ROOT'])
     return filepath
 
 def get_dbserver():
@@ -218,7 +249,7 @@ def get_db(create=False):
         if create:
             return server.create(name)
         else:
-            raise KeyError("CouchDB database '%s' does not exist" % name)
+            raise KeyError("CouchDB database '%s' does not exist." % name)
 
 def get_iuid():
     "Return a unique instance identifier."
@@ -294,14 +325,14 @@ def cmp_modified(i, j):
 
 def absolute_path(filename):
     "Return the absolute path given the current directory."
-    return os.path.join(constants.ROOT, filename)
+    return os.path.join(settings['ROOT'], filename)
 
 def check_password(password):
     """Check that the password is long and complex enough.
     Raise ValueError otherwise."""
-    if len(password) < constants.MIN_PASSWORD_LENGTH:
-        raise ValueError("password must be at least {0} characters long".
-                         format(constants.MIN_PASSWORD_LENGTH))
+    if len(password) < settings['MIN_PASSWORD_LENGTH']:
+        raise ValueError("Password must be at least {0} characters long.".
+                         format(settings['MIN_PASSWORD_LENGTH']))
 
 def hashed_password(password):
     "Return the password in hashed form."
@@ -330,3 +361,11 @@ def log(db, rqh, entity, changed=dict()):
     except (AttributeError, TypeError, KeyError):
         pass
     db.save(entry)
+
+def get_filename_extension(content_type):
+    "Return filename extension, correcting for silliness in 'mimetypes'."
+    if content_type == 'text/plain':
+        return '.txt'
+    if content_type == 'image/jpeg':
+        return '.jpg'
+    return mimetypes.guess_extension(content_type)

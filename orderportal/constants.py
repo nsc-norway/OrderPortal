@@ -3,11 +3,6 @@
 from __future__ import print_function, absolute_import
 
 import re
-import os
-
-# Source code directory
-ROOT = os.path.dirname(__file__)
-os.chdir(ROOT)
 
 # Patterns
 ID_RX    = re.compile(r'^[a-z][_a-z0-9]*$', re.IGNORECASE)
@@ -15,6 +10,7 @@ NAME_RX  = re.compile(r'^[^/]+$')
 IUID_RX  = re.compile(r'^[0-9a-f]{32}$')
 DATE_RX  = re.compile(r'^[0-9]{4}-[0-9]{2}-[0-9]{2}$') # Safe until 9999 CE...
 EMAIL_RX = re.compile(r'^[^@]+@[^@]+\.[^@]+$')
+VERSION_RX = re.compile(r'\d+\.\d+\.\d+')
 
 # Content types (MIME types)
 HTML_MIME = 'text/html'
@@ -50,11 +46,15 @@ FLOAT   = 'float'
 BOOLEAN = 'boolean'
 URL     = 'url'
 SELECT  = 'select'
+MULTISELECT  = 'multiselect'
 TEXT    = 'text'
 DATE    = 'date'
+TABLE   = 'table'
 ### This constant already defined above.
 ### GROUP   = 'group'
-TYPES   = [STRING, INT, FLOAT, BOOLEAN, URL, SELECT, TEXT, DATE, GROUP]
+### FILE    = 'file'
+TYPES = [STRING, INT, FLOAT, BOOLEAN, URL, SELECT, MULTISELECT,
+         TEXT, DATE, TABLE, FILE, GROUP]
 TYPE_LABELS = {INT: 'integer'}
 TYPE_HTML = {STRING: 'text', INT: 'number'}
 
@@ -62,11 +62,12 @@ TYPE_HTML = {STRING: 'text', INT: 'number'}
 TRUE  = frozenset(['true', 'yes', 't', 'y', '1'])
 FALSE = frozenset(['false', 'no', 'f', 'n', '0'])
 
-# Default global modes
+# Default global modes for database initialization
 DEFAULT_GLOBAL_MODES = dict(allow_registration=True,
                             allow_login=True,
                             allow_order_creation=True,
-                            allow_order_editing=True)
+                            allow_order_editing=True,
+                            allow_order_submission=True)
 
 # User login account
 USER_COOKIE = 'orderportal_user'
@@ -84,27 +85,19 @@ STAFF = 'staff'
 ADMIN = 'admin'
 ACCOUNT_ROLES = [USER, STAFF, ADMIN]
 
+# Hard-wired order status
+SUBMIT    = 'submit'
+SUBMITTED = 'submitted'
+
 # Form status; hard-wired!
 TESTING = 'testing'
 FORM_STATUSES = [PENDING, TESTING, ENABLED, DISABLED]
-
-# To be filled in from separate YAML file
-ORDER_STATES = {}
-ORDER_TRANSITIONS = {}
-
-# Password
-MIN_PASSWORD_LENGTH = 8
-
-# Display
-DEFAULT_PAGE_SIZE = 25
-MAX_RECENT_ORDERS = 10
-MAX_PENDING_ACCOUNTS = 10
-DEFAULT_MAX_DISPLAY_LOG = 20
 
 # Content-type to icon mapping
 CONTENT_TYPE_ICONS = {
     JSON_MIME: 'json.png',
     CSV_MIME: 'csv.png',
+    HTML_MIME: 'html.png',
     'application/pdf': 'pdf.png',
     'image/png': 'image.png',
     'image/jpeg': 'image.png',

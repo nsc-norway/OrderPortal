@@ -3,6 +3,7 @@
 from __future__ import print_function, absolute_import
 
 import logging
+import os.path
 from cStringIO import StringIO
 
 import tornado.web
@@ -32,9 +33,8 @@ class FileSaver(saver.Saver):
 
     def set_file(self, infile, name=None):
         self.file = infile
-        name = name or infile.filename
-        self.check_name(name)
-        self['name'] = name
+        if name:
+            self['name'] = name
         self['size'] = len(infile.body)
         self['content_type'] = infile.content_type or 'application/octet-stream'
 
@@ -56,74 +56,30 @@ class Files(RequestHandler):
     "List of files page."
 
     def get(self):
-        view = self.db.view('file/name', include_docs=True)
-        files = [r.doc for r in view]
+        docs = [r.doc for r in self.db.view('file/name', include_docs=True)]
+        files = [d for d in docs if not d.get('hidden')]
+        if self.is_admin():
+            hidden = [d for d in docs if d.get('hidden')]
+        else:
+            hidden = []
         files.sort(lambda i,j: cmp(i['modified'], j['modified']), reverse=True)
-        self.render('files.html', all_files=files)
+        hidden.sort(lambda i,j: cmp(i['modified'], j['modified']), reverse=True)
+        self.render('files.html', files=files, hidden=hidden)
 
 
 class File(RequestHandler):
-    "Send the file data."
+    "Return the file data."
 
     def get(self, name):
-        file = self.get_entity_view('file/name', name)
-        filename = file['_attachments'].keys()[0]
-        infile = self.db.get_attachment(file, filename)
-        if infile is None:
+        self.doc = self.get_entity_view('file/name', name)
+        filename = self.doc['_attachments'].keys()[0]
+        outfile = self.db.get_attachment(self.doc, filename)
+        if outfile is None:
             self.write('')
         else:
-            self.write(infile.read())
-            infile.close()
-        self.set_header('Content-Type', file['content_type'])
-
-
-class FileDownload(File):
-    "Download the file."
-
-    def get(self, name):
-        super(FileDownload, self).get(name)
-        self.set_header('Content-Disposition',
-                        'attachment; filename="{0}"'.format(name))
-
-
-class FileMeta(RequestHandler):
-    "Display the file metadata."
-
-    @tornado.web.authenticated
-    def get(self, name):
-        self.check_admin()
-        file = self.get_entity_view('file/name', name)
-        title = file.get('title') or file['name']
-        self.render('file_meta.html', file=file, title=title)
-
-    @tornado.web.authenticated
-    def post(self, name):
-        self.check_admin()
-        if self.get_argument('_http_method', None) == 'delete':
-            self.delete(name)
-            return
-        raise tornado.web.HTTPError(405, reason='POST only allowed for DELETE')
-
-    @tornado.web.authenticated
-    def delete(self, name):
-        self.check_admin()
-        file = self.get_entity_view('file/name', name)
-        self.delete_logs(file['_id'])
-        self.db.delete(file)
-        self.see_other('files')
-
-
-class FileLogs(RequestHandler):
-    "File log entries page."
-
-    @tornado.web.authenticated
-    def get(self, name):
-        self.check_admin()
-        file = self.get_entity_view('file/name', name)
-        self.render('logs.html',
-                    title="Logs for file '{0}'".format(name),
-                    entity=file,
-                    logs=self.get_logs(file['_id']))
+            self.write(outfile.read())
+            outfile.close()
+        self.set_header('Content-Type', self.doc['content_type'])
 
 
 class FileCreate(RequestHandler):
@@ -142,17 +98,31 @@ class FileCreate(RequestHandler):
                 try:
                     infile = self.request.files['file'][0]
                 except (KeyError, IndexError):
-                    self.see_other('files', error='No file uploaded.')
-                    return
-                saver.set_file(infile, self.get_argument('name', None))
+                    raise ValueError('No file uploaded.')
+                name = self.get_argument('name', None) or \
+                       os.path.splitext(infile.filename)[0]
+                saver.check_name(name)
+                saver.set_file(infile, name)
+                saver['title'] = self.get_argument('title', None)
+                saver['hidden'] = utils.to_bool(self.get_argument('hidden',
+                                                                  False))
                 saver['description'] = self.get_argument('description', None)
         except ValueError, msg:
             self.see_other('files', error=str(msg))
-        self.see_other('file_meta', saver['name'])
+        else:
+            self.see_other('files')
+
+
+class FileCreateApiV1(FileCreate):
+    "Create a new file via a script."
+
+    def check_xsrf_cookie(self):
+        "Do not check for XSRF cookie when script is calling."
+        pass
 
 
 class FileEdit(RequestHandler):
-    "Edit the file page."
+    "Edit or delete a file."
 
     @tornado.web.authenticated
     def get(self, name):
@@ -163,15 +133,60 @@ class FileEdit(RequestHandler):
     @tornado.web.authenticated
     def post(self, name):
         self.check_admin()
+        if self.get_argument('_http_method', None) == 'delete':
+            self.delete(name)
+            return
         file = self.get_entity_view('file/name', name)
         with FileSaver(doc=file, rqh=self) as saver:
-            saver['title'] = self.get_argument('title', None)
             try:
                 infile = self.request.files['file'][0]
             except (KeyError, IndexError):
                 # No new file upload, just leave it alone.
                 saver.file = None
             else:
-                saver.set_file(infile, self.get_argument('name', None))
+                saver.set_file(infile)
+            saver['title'] = self.get_argument('title', None)
+            saver['hidden'] = utils.to_bool(self.get_argument('hidden', False))
             saver['description'] = self.get_argument('description', None)
-        self.see_other('file_meta', saver['name'])
+        self.see_other('files')
+
+    @tornado.web.authenticated
+    def delete(self, name):
+        self.check_admin()
+        file = self.get_entity_view('file/name', name)
+        self.delete_logs(file['_id'])
+        self.db.delete(file)
+        self.see_other('files')
+
+
+class FileEditApiV1(FileEdit):
+    "Edit a file via a script."
+
+    def check_xsrf_cookie(self):
+        "Do not check for XSRF cookie when script is calling."
+        pass
+
+
+class FileDownload(File):
+    "Download the file."
+
+    def get(self, name):
+        super(FileDownload, self).get(name)
+        ext = utils.get_filename_extension(self.doc['content_type'])
+        if ext:
+            name += ext 
+        self.set_header('Content-Disposition',
+                        'attachment; filename="{0}"'.format(name))
+
+
+class FileLogs(RequestHandler):
+    "File log entries page."
+
+    @tornado.web.authenticated
+    def get(self, name):
+        self.check_admin()
+        file = self.get_entity_view('file/name', name)
+        self.render('logs.html',
+                    title="Logs for file '{0}'".format(name),
+                    entity=file,
+                    logs=self.get_logs(file['_id']))

@@ -2,7 +2,9 @@
 
 from __future__ import print_function, absolute_import
 
+import base64
 import logging
+import socket
 import traceback
 import urllib
 
@@ -21,17 +23,19 @@ class RequestHandler(tornado.web.RequestHandler):
     def prepare(self):
         "Get the database connection and global modes."
         self.db = utils.get_db()
+        self.global_modes = constants.DEFAULT_GLOBAL_MODES.copy()
         try:
-            self.global_modes = self.db['global_modes']
+            self.global_modes.update(self.db['global_modes'])
         except couchdb.ResourceNotFound:
-            self.global_modes = constants.DEFAULT_GLOBAL_MODES.copy()
+            pass
 
     def get_template_namespace(self):
         "Set the variables accessible within the template."
         result = super(RequestHandler, self).get_template_namespace()
         result['version'] = orderportal.__version__
-        result['settings'] = settings
         result['constants'] = constants
+        result['settings'] = settings
+        result['term'] = utils.term
         result['global_modes'] = self.global_modes
         result['absolute_reverse_url'] = self.absolute_reverse_url
         result['order_reverse_url'] = self.order_reverse_url
@@ -66,46 +70,85 @@ class RequestHandler(tornado.web.RequestHandler):
             url += '?' + urllib.urlencode(query)
         return url
 
-    def order_reverse_url(self, order, **query):
-        "URL for order; use identifier variant if available. Always absolute"
+    def order_reverse_url(self, order, api=False, **query):
+        "URL for order; use identifier variant if available. Always absolute."
+        URL = self.absolute_reverse_url
         try:
             identifier = order['identifier']
         except KeyError:
-            return self.absolute_reverse_url('order', order['_id'], **query)
+            return URL('order', order['_id'], **query)
         else:
-            return self.absolute_reverse_url('order_id', identifier,**query)
+            if api:
+                return URL('order_id_api', identifier, **query)
+            else:
+                return URL('order_id', identifier, **query)
 
     def get_current_user(self):
         """Get the currently logged-in user account, if any.
         This overrides a tornado function, otherwise it should have
         been called 'get_current_account', since terminology 'account'
         is used in this code rather than 'user'."""
+        try:
+            account = self.get_current_user_session()
+            if not account:
+                account = self.get_current_user_basic()
+            if not account:
+                account = self.get_current_user_api_key()
+            return account
+        except ValueError:
+            raise tornado.web.HTTPError(403)
+
+    def get_current_user_session(self):
+        """Get the current user from a secure login session cookie.
+        Return None if no attempt at authentication.
+        Raise ValueError if incorrect authentication."""
         email = self.get_secure_cookie(
             constants.USER_COOKIE,
             max_age_days=settings['LOGIN_MAX_AGE_DAYS'])
-        if email:
-            try:
-                account = self.get_account(email)
-            except ValueError:
-                return None
-            # Check if login session is invalidated.
-            if account.get('login') is None:
-                return None
+        if not email: return None
+        account = self.get_account(email)
+        # Check if login session is invalidated.
+        if account.get('login') is None: raise ValueError
+        logging.info("Session login: account %s", account['email'])
+        return account
+
+    def get_current_user_basic(self):
+        """Get the current user by HTTP Basic authentication.
+        This should be used only if the site is using TLS (SSL, https).
+        Return None if no attempt at authentication.
+        Raise ValueError if incorrect authentication."""
+        try:
+            auth = self.request.headers['Authorization']
+        except KeyError:
+            return None
+        try:
+            auth = auth.split()
+            if auth[0].lower() != 'basic': raise ValueError
+            auth = base64.b64decode(auth[1])
+            email, password = auth.split(':', 1)
+            account = self.get_account(email)
+            if utils.hashed_password(password) != account.get('password'):
+                raise ValueError
+        except (IndexError, ValueError, TypeError):
+            raise ValueError
+        logging.info("Basic auth login: account %s", account['email'])
+        return account
+
+    def get_current_user_api_key(self):
+        """Get the current user by API key authentication.
+        Return None if no attempt at authentication.
+        Raise ValueError if incorrect authentication."""
+        try:
+            api_key = self.request.headers[constants.API_KEY_HEADER]
+        except KeyError:
+            return None
         else:
             try:
-                api_key = self.request.headers[constants.API_KEY_HEADER]
-            except KeyError:
-                return None
-            else:
-                try:
-                    account = self.get_entity_view('account/api_key', api_key)
-                except tornado.web.HTTPError:
-                    raise tornado.web.HTTPError(401)
-                logging.debug("API login account %s", account['email'])
-        # Check that account is enabled.
-        if account.get('status') != constants.ENABLED:
-            return None
-        return account
+                account = self.get_entity_view('account/api_key', api_key)
+            except tornado.web.HTTPError:
+                raise ValueError
+            logging.info("API key login: account %s", account['email'])
+            return account
 
     def write_error(self, status_code, **kwargs):
         """Override to implement custom error pages.
@@ -119,7 +162,12 @@ class RequestHandler(tornado.web.RequestHandler):
         the "current" exception for purposes of methods like
         ``sys.exc_info()`` or ``traceback.format_exc``.
         """
-        if self.settings.get("serve_traceback") and "exc_info" in kwargs:
+        if not hasattr(self, 'db'):
+            self.set_header('Content-Type', 'text/plain')
+            self.write('Site is down due to off-line back-end database.\n')
+            self.write('Try again later...\n')
+            self.finish()
+        elif self.settings.get("serve_traceback") and "exc_info" in kwargs:
             # in debug mode, try to send a traceback
             self.set_header('Content-Type', 'text/plain')
             for line in traceback.format_exception(*kwargs["exc_info"]):
@@ -150,13 +198,13 @@ class RequestHandler(tornado.web.RequestHandler):
         "Check if current user is admin."
         if not self.is_admin():
             raise tornado.web.HTTPError(
-                403, reason="role 'admin' is required for this")
+                403, reason="Role 'admin' is required for this.")
 
     def check_staff(self):
         "Check if current user is staff or admin."
         if not self.is_staff():
             raise tornado.web.HTTPError(
-                403, reason="role 'staff' is required for this")
+                403, reason="Role 'admin' or 'staff' is required for this.")
 
     def get_admins(self):
         "Get the list of enabled admin accounts."
@@ -206,16 +254,16 @@ class RequestHandler(tornado.web.RequestHandler):
         try:
             entity = self.db[iuid]
         except couchdb.ResourceNotFound:
-            raise tornado.web.HTTPError(404, reason='no such entity')
+            raise tornado.web.HTTPError(404, reason='Sorry, no such entity.')
         try:
             if doctype is not None and entity[constants.DOCTYPE] != doctype:
                 raise KeyError
         except KeyError:
             raise tornado.web.HTTPError(
-                404, reason='internal problem: invalid entity doctype')
+                404, reason='Internal problem: invalid entity doctype.')
         return entity
 
-    def get_entity_view(self, viewname, key, reason='no such entity'):
+    def get_entity_view(self, viewname, key, reason='Sorry, no such entity.'):
         """Get the entity by the view name and the key.
         Raise HTTP 404 if no such entity.
         """
@@ -271,7 +319,7 @@ class RequestHandler(tornado.web.RequestHandler):
         except (TypeError, IndexError):
             pass
         result = dict(count=count,
-                      size=constants.DEFAULT_PAGE_SIZE)
+                      size=settings['DISPLAY_DEFAULT_PAGE_SIZE'])
         result['max_page'] = (count - 1) / result['size']
         try:
             result['current'] = max(0,
@@ -290,7 +338,7 @@ class RequestHandler(tornado.web.RequestHandler):
         try:
             return self.get_entity_view('account/email', email.strip().lower())
         except tornado.web.HTTPError:
-            raise ValueError('no such account')
+            raise ValueError('Sorry, no such account.')
 
     def get_account_order_count(self, email):
         "Get the number of orders for the account."
@@ -363,18 +411,19 @@ class RequestHandler(tornado.web.RequestHandler):
                 result[row.key] = name
         return result
 
-    def get_forms(self, enabled=True):
-        """Get forms, enabled or all.
+    def get_forms(self, all=False):
+        """Get forms, all or only the enabled+disabled.
         Return list of tuple (title, iuid) sorted by title."""
-        if enabled:
-            view = self.db.view('form/enabled')
+        view = self.db.view('form/modified', include_docs=True)
+        if all:
+            forms = [(r.value, r.id) for r in view]
         else:
-            view = self.db.view('form/modified')
-        forms = [(r.value, r.id) for r in view]
+            forms = [(r.value, r.id) for r in view
+                     if r.doc['status'] in (constants.ENABLED, constants.DISABLED)]
         forms.sort()
         return forms
 
-    def get_logs(self, iuid, limit=constants.DEFAULT_MAX_DISPLAY_LOG+1):
+    def get_logs(self, iuid, limit=settings['DISPLAY_DEFAULT_MAX_LOG']+1):
         "Return the event log documents for the given entity iuid."
         kwargs = dict(include_docs=True,
                       startkey=[iuid, constants.CEILING],

@@ -11,7 +11,7 @@ from orderportal import utils
 from orderportal import admin
 
 
-def load_texts(db, textfilepath, overwrite=True, verbose=False):
+def load_texts(db, textfilepath, overwrite=True):
     "Load the texts from the YAML file, overwriting by default."
     with open(utils.expand_filepath(textfilepath)) as infile:
         texts = yaml.safe_load(infile)
@@ -26,16 +26,14 @@ def load_texts(db, textfilepath, overwrite=True, verbose=False):
             with admin.TextSaver(doc=doc, db=db) as saver:
                 saver['name'] = key
                 saver['text'] = text
-            if verbose:
-                print("Text '{0}' loaded".format(key))
+            print("Text '{0}' loaded".format(key))
 
 
 if __name__ == '__main__':
     parser = utils.get_command_line_parser(description=
         'Load texts from file into the database.')
     (options, args) = parser.parse_args()
-    utils.load_settings(filepath=options.settings,
-                        verbose=options.verbose)
+    utils.load_settings(filepath=options.settings)
     if not options.force:
         response = raw_input('about to overwrite all current texts; are really sure? [n] > ')
         if not utils.to_bool(response):
@@ -44,6 +42,4 @@ if __name__ == '__main__':
         textfilepath = args[0]
     except IndexError:
         textfilepath = settings['INITIAL_TEXTS_FILEPATH']
-    load_texts(utils.get_db(),
-               textfilepath=textfilepath,
-               verbose=options.verbose)
+    load_texts(utils.get_db(), textfilepath=textfilepath)

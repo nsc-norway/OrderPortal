@@ -20,12 +20,10 @@ from orderportal.message import MessageSaver
 class Messenger(object):
     "Send unsent messages to given recipients."
 
-    def __init__(self, db, verbose=False, dry_run=False):
+    def __init__(self, db, dry_run=False):
         self.db = db
-        self.verbose = verbose
         self.dry_run = dry_run
-        if self.verbose:
-            print('Messenger', utils.timestamp())
+        self.banner_printed = False
 
     @property
     def server(self):
@@ -62,7 +60,7 @@ class Messenger(object):
         for row in view:
             message = row.doc
             if self.dry_run:
-                print(message['recipients'], message['subject'])
+                self.print_log(message)
             else:
                 self.send_email(message)
                 with MessageSaver(doc=message, db=self.db) as saver:
@@ -78,10 +76,17 @@ class Messenger(object):
         self.server.sendmail(message['sender'],
                              message['recipients'],
                              mail.as_string())
-        if self.verbose:
-            print(u"sent email '{0}' to {1}".format(
-                    message['subject'],
-                    ', '.join(message['recipients'])).encode('utf-8'))
+        self.print_log(message)
+
+    def print_log(self, message):
+        if not self.banner_printed:
+            print('Messenger', utils.timestamp())
+            if self.dry_run:
+                print('*** Dry run only! ***')
+            self.banner_printed = True
+        print(u"sent email '{0}' to {1}".format(
+                message['subject'],
+                ', '.join(message['recipients'])).encode('utf-8'))
 
 
 def get_args():
@@ -95,9 +100,6 @@ def get_args():
 
 if __name__ == '__main__':
     (options, args) = get_args()
-    utils.load_settings(filepath=options.settings,
-                        verbose=options.verbose)
-    messenger = Messenger(utils.get_db(),
-                          verbose=options.verbose,
-                          dry_run=options.dry_run)
+    utils.load_settings(filepath=options.settings)
+    messenger = Messenger(utils.get_db(), dry_run=options.dry_run)
     messenger.process()

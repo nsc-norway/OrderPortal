@@ -1,5 +1,5 @@
 #!/usr/bin/python2
-"OrderPortal: Web application root."
+"OrderPortal: Web application server."
 
 from __future__ import print_function, absolute_import
 
@@ -10,7 +10,6 @@ import sys
 import tornado.web
 import tornado.ioloop
 
-from orderportal import constants
 from orderportal import settings
 from orderportal import utils
 from orderportal import uimodules
@@ -28,19 +27,26 @@ from orderportal.file import *
 from orderportal.event import *
 from orderportal.search import *
 
-from orderportal.nsc_sample_table import *
+from orderportal.nsc_order_package import *
 
+def main():
+    parser = utils.get_command_line_parser(description='OrderPortal server.')
+    (options, args) = parser.parse_args()
+    utils.load_settings(filepath=options.settings)
 
-def get_handlers():
     url = tornado.web.url
-    urls = [url(r'/', Home, name='home')]
+    handlers = [url(r'/', Home, name='home')]
     try:
-        regexp = r"/order/({0})".format(settings['ORDER_IDENTIFIER_REGEXP'])
+        regexp = settings['ORDER_IDENTIFIER_REGEXP']
     except KeyError:
         pass
     else:
-        urls.append(url(regexp, Order, name='order_id'))
-    urls.extend([
+        handlers.append(url(r"/order/({0})".format(regexp),
+                            Order, name='order_id'))
+        handlers.append(url(r"/api/v1/order/({0})".format(regexp),
+                            OrderApiV1, name='order_id_api'))
+
+    handlers.extend([
         url(r'/order/([0-9a-f]{32})', Order, name='order'),
         url(r'/api/v1/order/([0-9a-f]{32})', OrderApiV1, name='order_api'),
         url(r'/order/([0-9a-f]{32})/logs', OrderLogs, name='order_logs'),
@@ -48,6 +54,8 @@ def get_handlers():
         url(r'/order/([0-9a-f]{32})/edit', OrderEdit, name='order_edit'),
         url(r'/order/([0-9a-f]{32})/transition/(\w+)',
             OrderTransition, name='order_transition'),
+        url(r'/api/v1/order/([0-9a-f]{32})/transition/(\w+)',
+            OrderTransitionApiV1, name='order_transition_api'),
         url(r'/order/([0-9a-f]{32})/clone', OrderClone, name='order_clone'),
         url(r'/order/([0-9a-f]{32})/file', OrderAttach, name='order_attach'),
         url(r'/order/([0-9a-f]{32})/file/([^/]+)', OrderFile,name='order_file'),
@@ -91,7 +99,7 @@ def get_handlers():
             AccountUpdateInfo, name='account_update_info'),
         url(r'/forms', Forms, name='forms'),
         url(r'/form/([0-9a-f]{32})', Form, name='form'),
-        url(r'/api/1/form/([0-9a-f]{32})', FormApiV1, name='form_api'),
+        url(r'/api/v1/form/([0-9a-f]{32})', FormApiV1, name='form_api'),
         url(r'/form/([0-9a-f]{32})/logs', FormLogs, name='form_logs'),
         url(r'/form', FormCreate, name='form_create'),
         url(r'/form/([0-9a-f]{32})/edit', FormEdit, name='form_edit'),
@@ -113,6 +121,8 @@ def get_handlers():
         url(r'/contact', Contact, name='contact'),
         url(r'/about', About, name='about'),
         url(r'/techinfo', TechInfo, name='techinfo'),
+        url(r'/statistics', Statistics, name='statistics'),
+        url(r'/api/v1/statistics', StatisticsApiV1, name='statistics_api'),
         url(r'/infos', Infos, name='infos'),
         url(r'/info', InfoCreate, name='info_create'),
         url(r'/info/([^/]+)', Info, name='info'),
@@ -122,8 +132,8 @@ def get_handlers():
         url(r'/file', FileCreate, name='file_create'),
         url(r'/file/([^/]+)', File, name='file'),
         url(r'/file/([^/]+)/download', FileDownload, name='file_download'),
-        url(r'/file/([^/]+)/meta', FileMeta, name='file_meta'),
         url(r'/file/([^/]+)/edit', FileEdit, name='file_edit'),
+        url(r'/api/v1/file/([^/]+)/edit', FileEditApiV1, name='file_edit_api'),
         url(r'/file/([^/]+)/logs', FileLogs, name='file_logs'),
         url(r'/text/([^/]+)', Text, name='text'),
         url(r'/log/([0-9a-f]{32})', Log, name='log'),
@@ -132,21 +142,13 @@ def get_handlers():
         url(r'/admin/global_modes', GlobalModes, name='global_modes'),
         url(r'/admin/statuses', Statuses, name='statuses'),
         url(r'/admin/settings', Settings, name='settings'),
+        url(r'/nsc/package/([0-9a-f]{32})', NscOrderPkgV1, name='nsc_order_package'),
         url(r'/site/([^/]+)', tornado.web.StaticFileHandler,
             {'path': settings['SITE_DIR']}, name='site'),
         ])
-    urls.append(url(r'/.*', NoSuchEntity))
-    return urls
-
-def main(pidfile=None):
-    logging.info("OrderPortal version %s", orderportal.__version__)
-    logging.info("settings from %s", settings['SETTINGS_FILEPATH'])
-    if settings['TORNADO_DEBUG']:
-        logging.info('tornado debug')
-    if settings['LOGGING_DEBUG']:
-        logging.info('logging debug')
+    handlers.append(url(r'/.*', NoSuchEntity))
     application = tornado.web.Application(
-        handlers=get_handlers(),
+        handlers=handlers,
         debug=settings.get('TORNADO_DEBUG', False),
         cookie_secret=settings['COOKIE_SECRET'],
         xsrf_cookies=True,
@@ -154,21 +156,18 @@ def main(pidfile=None):
         template_path='html',
         static_path='static',
         login_url=r'/login')
-    # Add href URLs for the status icons
+    # Add href URLs for the status icons.
+    # This depends on order status setup.
     for key, value in settings['ORDER_STATUSES_LOOKUP'].iteritems():
         value['href'] = application.reverse_url('site', key + '.png')
     application.listen(settings['PORT'], xheaders=True)
     pid = os.getpid()
     logging.info("web server PID %s on port %s", pid, settings['PORT'])
-    if pidfile:
-        with open(pidfile, 'w') as pf:
+    if options.pidfile:
+        with open(options.pidfile, 'w') as pf:
             pf.write(str(pid))
     tornado.ioloop.IOLoop.instance().start()
 
 
 if __name__ == "__main__":
-    parser = utils.get_command_line_parser(description='Web app server.')
-    (options, args) = parser.parse_args()
-    utils.load_settings(filepath=options.settings,
-                        verbose=options.verbose)
-    main(options.pidfile)
+    main()

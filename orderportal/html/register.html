@@ -33,7 +33,8 @@
       <div class="col-md-6">
 	<label class="control-label" for="email">Email</label>
 	<input type="email" class="form-control"
-	       name="email" id="email">
+	       name="email" id="email"
+	       value="{{ values.get('email') or '' }}">
 	<span style="color:red; margin-right: 1em;"
 	      class="glyphicon glyphicon-star form-control-feedback"
 	      aria-hidden="true"></span>
@@ -52,7 +53,8 @@
       <div class="col-md-6">
 	<label class="control-label" for="first_name">First name</label>
 	<input type="text" class="form-control"
-	       name="first_name" id="first_name">
+	       name="first_name" id="first_name"
+	       value="{{ values.get('first_name') or '' }}">
 	<span style="color:red; margin-right: 1em;"
 	      class="glyphicon glyphicon-star form-control-feedback"
 	      aria-hidden="true"></span>
@@ -65,7 +67,8 @@
       <div class="col-md-6">
 	<label class="control-label" for="last_name">Last name</label>
 	<input type="text" class="form-control"
-	       name="last_name" id="last_name">
+	       name="last_name" id="last_name"
+	       value="{{ values.get('last_name') or '' }}">
 	<span style="color:red; margin-right: 1em;"
 	      class="glyphicon glyphicon-star form-control-feedback"
 	      aria-hidden="true"></span>
@@ -80,9 +83,16 @@
       <div class="col-md-6">
 	<select class="form-control" name="university" id="university">
 	  {# OrderedDict ! #}
+	  {% set found = False %}
 	  <option value="">[select from the list below]</option>
 	  {% for abbrev, data in settings['UNIVERSITIES'].items() %}
-	    <option value="{{ abbrev }}">{{ abbrev }}
+	    {% if abbrev == values.get('university') %}
+	      {% set selected = 'selected' %}
+	      {% set found = True %}
+            {% else %}
+              {% set selected = '' %}
+            {% end %}
+	    <option {{ selected }} value="{{ abbrev }}">{{ abbrev }}
 	      {% if data.get('name') %}
 	      ({{ data.get('name') }})
 	      {% end %}
@@ -94,14 +104,22 @@
 	      aria-hidden="true"></span>
       </div>
       <div class="col-md-6">
+	{% if found %}
 	<input type="text" class="form-control"
 	       name="university_other" id="university_other"
 	       placeholder="Provide full name of organization if not in list.">
+	{% else %}
+	<input type="text" class="form-control"
+	       name="university_other" id="university_other"
+	       value="{{ values.get('university') or ''}}"
+	       placeholder="Provide full name of organization if not in list.">
+	{% end %}
       </div>
       {% else %}
       <div class="col-md-6">
 	<input type="text" class="form-control"
-	       name="university" id="university">
+	       name="university" id="university"
+	       value="{{ values.get('university') or ''}}">
 	<span style="color:red; margin-right: 1em;"
 	      class="glyphicon glyphicon-star form-control-feedback"
 	      aria-hidden="true"></span>
@@ -119,55 +137,87 @@
       <div class="col-md-6">
 	<label class="control-label" for="department">Department</label>
 	<input type="text" class="form-control"
-	       name="department" id="department">
+	       name="department" id="department"
+	       value="{{ values.get('department') or '' }}">
       </div>
     </div>
     <span class="help-block">
       University department, company section, group, or similar.
     </span>
   </div>
-
+  {% if settings.get('ACCOUNT_PI') %}
   <div class="form-group">
     <div class="row">
       <div class="col-md-6">
 	<label class="control-label" for="pi">Principal Investigator</label>
 	<div  class="form-control">
-	  <input type="checkbox" name="pi" id="pi" value="true"> Yes
+	  <input type="checkbox" name="pi" id="pi" value="true"
+		 {{ values.get('pi') and 'checked' or '' }}
+		 > Yes
 	</div>
       </div>
     </div>
   </div>
+  {% end %}
 
+  {% if settings.get('ACCOUNT_FUNDER_INFO') %}
   <div class="panel panel-default">
     <div class="panel-heading">
       Information required by our funders for reporting purposes.
     </div>
     <div class="panel-body">
 
+      {% if settings.get('ACCOUNT_FUNDER_INFO_GENDER') %}
       <div class="form-group has-feedback">
 	<div class="row">
-	  <div class="col-md-3">
+	  <div class="col-md-5">
 	    <label class="control-label" for="gender">Gender</label>
 	    <div>
+	      {% for gender in ['male', 'female', 'other'] %}
 	      <label class="radio-inline">
-		<input type="radio" name="gender" value="male">Male</label>
-	      <label class="radio-inline">
-		<input type="radio" name="gender" value="female">Female</label>
-	      <label class="radio-inline">
-		<input type="radio" name="gender" value="other">Other</label>
+		<input type="radio" name="gender"
+		       value="{{ gender }}"
+		       {{ gender == values.get('gender') and 'checked' or '' }}>
+		{{ gender.capitalize() }}
+	      </label>
+	      {% end %}
 	    </div>
+	    <span style="color:red; margin-right: -1em;"
+		  class="glyphicon glyphicon-star form-control-feedback"
+		  aria-hidden="true"></span>
 	  </div>
 	</div>
       </div>
+      {% end %} {# if settings.get('ACCOUNT_FUNDER_INFO_GENDER') #}
 
-      {% if settings['subjects'] %}
+      {% if settings.get('ACCOUNT_FUNDER_INFO_GROUP_SIZE') %}
+      <div class="form-group has-feedback">
+	<div class="row">
+	  <div class="col-md-3">
+	    <label class="control-label" for="gender">Group size</label>
+	    <input type="number" class="form-control"
+		   name="group_size", id="group_size"
+		   value="{{ values.get('group_size') or '0' }}">
+	    <span style="color:red; margin-right: 1em;"
+		  class="glyphicon glyphicon-star form-control-feedback"
+		  aria-hidden="true"></span>
+	  </div>
+	</div>
+	<span class="help-block">
+	  Specify the approximate number of members in your group.
+	</span>
+      </div>
+      {% end %} {# if settings.get('ACCOUNT_FUNDER_INFO_GROUP_SIZE') #}
+
+      {% if settings.get('ACCOUNT_FUNDER_INFO_SUBJECT') and settings['subjects'] %}
       <div class="form-group has-feedback">
 	<div class="row">
 	  <div class="col-md-6">
 	    <label class="control-label" for="subject">Subject</label>
 	    <select class="form-control" name="subject" id="subject">
 	      {% for subject in settings['subjects'] %}
-	      <option value="{{ subject['code'] }}">
+	      <option value="{{ subject['code'] }}"
+		      {{ str(subject['code']) == values.get('subject') and 'selected' or ''}}>
 		{{ '- ' * subject['level'] + subject['term'] }}
 	      </option>
 	      {% end %}
@@ -181,11 +231,12 @@
 	  Select the subject term that best characterizes your field.
 	</span>
       </div>
-      {% end %}
+      {% end %} {# if settings.get('ACCOUNT_FUNDER_INFO_SUBJECT') and settings['subjects'] #}
 
     </div>
   </div>
-
+  {% end %} {# if settings.get('ACCOUNT_FUNDER_INFO') #}
+  {% if settings.get('ACCOUNT_CONTACT_INFO') %}
   <div class="panel panel-default">
     <div class="panel-heading">
       Postal address for delivery of paper documents, returned samples, etc.
@@ -196,7 +247,8 @@
 	  <div class="col-md-8">
 	    <label class="control-label" for="street">Address</label>
 	    <textarea class="form-control" rownum="2"
-		      id="address" name="address"></textarea>
+		      id="address" name="address"
+		      >{{ values.get('address') or '' }}</textarea>
 	  </div>
 	</div>
 	<span class="help-block">
@@ -208,7 +260,8 @@
 	  <div class="col-md-8">
 	    <label class="control-label" for="zip">Zip code</label>
 	    <input type="text" class="form-control"
-		   id="zip" name="zip">
+		   id="zip" name="zip"
+		   value="{{ values.get('zip') or ''}}">
 	  </div>
 	</div>
 	<span class="help-block">
@@ -219,7 +272,9 @@
 	<div class="row">
 	  <div class="col-md-8">
 	    <label class="control-label" for="city">City</label>
-	    <input type="text" class="form-control" id="city" name="city">
+	    <input type="text" class="form-control"
+		   id="city" name="city"
+		   value="{{ values.get('city') or '' }}">
 	  </div>
 	</div>
       </div>
@@ -228,8 +283,11 @@
 	  <div class="col-md-8">
 	    <label class="control-label" for="country">Country</label>
 	    <select class="form-control" name="country" id="country">
-	      {% for c in settings['countries'] %}
-	      <option value="{{ c['code'] }}">{{ c['name'] }}</option>
+	      {% for c in settings['COUNTRIES'] %}
+	      <option value="{{ c['code'] }}"
+		      {{ c['code'] == values.get('country') and 'selected' or '' }}>
+		{{ c['name'] }}
+	      </option>
 	      {% end %}
 	    </select>
 	  </div>
@@ -248,13 +306,13 @@
     </div>
     <span class="help-block">
       Invoice reference code that may be required on your invoices for
-      your accounting.
+      your accounting. Please note that some services may be free of charge.
     </span>
   </div>
 
   <div class="panel panel-default">
     <div class="panel-heading">
-      Invoice address. If none given, copies the address above.
+      Invoice address.
     </div>
     <div class="panel-body">
       <div class="form-group">
@@ -262,7 +320,8 @@
 	  <div class="col-md-8">
 	    <label class="control-label" for="invoice_address">Address</label>
 	    <textarea class="form-control" rownum="2"
-		      id="invoice_address" name="invoice_address"></textarea>
+		      id="invoice_address" name="invoice_address"
+		      >{{ values.get('invoice_address') or '' }}</textarea>
 	  </div>
 	</div>
 	<span class="help-block">
@@ -274,7 +333,8 @@
 	  <div class="col-md-8">
 	    <label class="control-label" for="invoice_zip">Zip code</label>
 	    <input type="text" class="form-control"
-		   id="invoice_zip" name="invoice_zip">
+		   id="invoice_zip" name="invoice_zip"
+		   value="{{ values.get('invoice_zip') or ''}}">
 	  </div>
 	</div>
 	<span class="help-block">
@@ -286,7 +346,8 @@
 	  <div class="col-md-8">
 	    <label class="control-label" for="invoice_city">City</label>
 	    <input type="text" class="form-control"
-		   id="invoice_city" name="invoice_city">
+		   id="invoice_city" name="invoice_city"
+		   value="{{ values.get('invoice_city') or '' }}">
 	  </div>
 	</div>
       </div>
@@ -296,8 +357,10 @@
 	    <label class="control-label" for="invoice_country">Country</label>
 	    <select class="form-control"
 		    name="invoice_country" id="invoice_country">
-	      {% for c in settings['countries'] %}
-	      <option value="{{ c['code'] }}">{{ c['name'] }}</option>
+	      {% for c in settings['COUNTRIES'] %}
+	      <option value="{{ c['code'] }}"
+		      {{ c['code'] == values.get('invoice_country') and 'selected' or '' }}>
+		{{ c['name'] }}</option>
 	      {% end %}
 	    </select>
 	  </div>
@@ -311,13 +374,15 @@
       <div class="col-md-6">
 	<label class="control-label" for="phone">Phone</label>
 	<textarea rows="3" class="form-control"
-		  name="phone" id="phone"></textarea>
+		  name="phone" id="phone"
+		  >{{ values.get('phone') or ''}}</textarea>
       </div>
     </div>
     <span class="help-block">
       One or more telephone numbers, one per line.
     </span>
   </div>
+  {% end %}
 
   <div class="form-group">
     <label class="control-label"></label>

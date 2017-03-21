@@ -7,41 +7,20 @@
 
 {% block main_content %}
 <div class="well">
-Various documents and files are available here for download. These may
-include presentations (slide shows), price lists, specifications and
-similar documents.
+  Various documents and files for download. These may include
+  presentations, price lists, specifications and other documents.
 </div>
 
-<table class="table">
-  {% for file in all_files %}
-  <tr>
-    <td>
-      <h4>
-	<a href="{{ reverse_url('file_download', file['name']) }}">
-	  {{ file['name'] }}
-	  {% module ContentType(file['content_type']) %}
-	</a>
-      </h4>
-      {% module Markdown(file.get('description')) %}
-    </td>
-    <td>{{ int(0.5 + file['size'] / 1000.0) }} kB</td>
-    <td><span class="localtime">{{ file['modified'] }}</span></td>
-    {% if is_admin %}
-    <td>
-      <form action="{{ reverse_url('file_meta', file['name']) }}"
-	    role="form"
-	    method="GET">
-	<button type="submit" class="btn btn-md btn-primary">
-	  <span class="glyphicon glyphicon-edit"></span>
-	  Edit
-	</button>
-      </form>
-    </td>
-    {% end %}
-  </tr>
-  {% end %}
-</table>
-{% end %}{# block main_content #}
+{% set filelist = files %}
+{% include 'files_list.html' %}
+
+{% if is_admin %}
+{% set filelist = hidden %}
+<h2>Unlisted files</h2>
+{% include 'files_list.html' %}
+{% end %}
+
+{% end %} {# block main_content #}
 
 {% block meta_content %}
 {% if is_admin %}

@@ -2,7 +2,7 @@
 
 {% extends "base.html" %}
 
-{% block head_title %}Orders{% end %}
+{% block head_title %}{{ term('Orders') }}{% end %}
 {% block body_title %}
 {% module Icon('order', title='Orders', label=True) %}
 {% end %}
@@ -32,12 +32,12 @@
 	  method="GET">
       <span class="glyphicon glyphicon-filter"></span>
       <div class="form-group">
-	<label for="form">Filter by</label>
-	<select name="form" id="form" class="form-control refresh">
+	<label for="form_title">Filter by</label>
+	<select name="form_title" id="form_title" class="form-control refresh">
 	  <option value="">[any form]</option>
-	  {% for ftitle, fid in forms %}
-	  {% set sel = fid == params.get('form') and 'selected' or '' %}
-	  <option {{ sel }} value="{{ fid }}">{{ ftitle }}</option>
+	  {% for title in form_titles %}
+	  {% set sel = title == params.get('form_title') and 'selected' or '' %}
+	  <option {{ sel }}>{{ title }}</option>
 	  {% end %}
 	</select>
       </div>
@@ -64,7 +64,7 @@
 	  {% end %}
 	</select>
       </div>
-      {% if settings['ORDERS_DISPLAY_MOST_RECENT'] > 0 %}
+      {% if settings['DISPLAY_ORDERS_MOST_RECENT'] > 0 %}
       <div class="form-group">
 	<div class="control-label refresh" for="recent">
 	  &nbsp;
@@ -76,11 +76,11 @@
 	  <label class="radio">
 	    {% set checked = not checked and 'checked' or '' %}
 	    <input type="radio" name="recent" value="true" {{ checked }}>
-	    Only {{ settings['ORDERS_DISPLAY_MOST_RECENT'] }} most recent
+	    Only {{ settings['DISPLAY_ORDERS_MOST_RECENT'] }} most recent
 	  </label>
 	</div>
       </div>
-      {% end %} {# if settings['ORDERS_DISPLAY_MOST_RECENT'] > 0 #}
+      {% end %} {# if settings['DISPLAY_ORDERS_MOST_RECENT'] > 0 #}
     </form>
   </div>
 </div>

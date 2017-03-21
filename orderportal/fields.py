@@ -4,6 +4,8 @@ from __future__ import print_function, absolute_import
 
 import logging
 
+import tornado.web
+
 from . import constants
 from . import settings
 from . import utils
@@ -78,7 +80,7 @@ class Fields(object):
         return self._lookup[identifier]
 
     def add(self, identifier, rqh):
-        "Add a field from HTML form data in the RequestHandler instance."
+        "Add a form field from data in the RequestHandler instance."
         assert identifier not in self, 'field identifier must be unique in form'
         type = rqh.get_argument('type')
         assert type in constants.TYPES, 'invalid field type'
@@ -93,15 +95,31 @@ class Fields(object):
                        rqh.get_argument('restrict_write', False)),
                    erase_on_clone=utils.to_bool(
                        rqh.get_argument('erase_on_clone', False)),
+                   initial_display=utils.to_bool(
+                       rqh.get_argument('initial_display', False)),
                    description=rqh.get_argument('description', None))
         if type == constants.GROUP:
             new['fields'] = []
+        # Set the possible values for menu or radiobuttons field.
         elif type == constants.SELECT:
             values = rqh.get_argument('select', '').split('\n')
             values = [v.strip() for v in values]
             values = [v for v in values if v]
             new['select'] = values
             new['display'] = rqh.get_argument('display', None) or 'menu'
+        # Set the possible values for a multiselect field.
+        elif type == constants.MULTISELECT:
+            values = rqh.get_argument('multiselect', '').split('\n')
+            values = [v.strip() for v in values]
+            values = [v for v in values if v]
+            new['multiselect'] = values
+        # Set the column identifiers for a table field.
+        elif type == constants.TABLE:
+            values = rqh.get_argument('table', '').split('\n')
+            values = [v.strip() for v in values]
+            values = [v for v in values if v]
+            new['table'] = values
+        # Set the group which the field is a member of.
         group = rqh.get_argument('group', None)
         if group == '': group = None
         for field in self:
@@ -122,7 +140,9 @@ class Fields(object):
         return new
 
     def update(self, identifier, rqh):
-        "Update the field from HTML form data in the RequestHandler instance."
+        """Update the form field from data in the RequestHandler instance.
+        This includes moving the field into a different group,
+        or within a group."""
         assert identifier in self, 'field identifier must be defined in form'
         new = dict(label=rqh.get_argument('label', None),
                    required=utils.to_bool(
@@ -133,16 +153,11 @@ class Fields(object):
                        rqh.get_argument('restrict_write', False)),
                    erase_on_clone=utils.to_bool(
                        rqh.get_argument('erase_on_clone', False)),
+                   initial_display=utils.to_bool(
+                       rqh.get_argument('initial_display', False)),
                    description=rqh.get_argument('description', None))
         field = self._lookup[identifier]
-        if field['type'] == constants.SELECT:
-            values = rqh.get_argument('select', '').split('\n')
-            values = [v.strip() for v in values]
-            values = [v for v in values if v]
-            new['select'] = values
-            new['display'] = rqh.get_argument('display', None) or 'menu'
-        elif field['type'] == constants.BOOLEAN:
-            new['checkbox'] = utils.to_bool(rqh.get_argument('checkbox', None))
+        # Conditional field setup
         identifier = rqh.get_argument('visible_if_field', None)
         if identifier == '': identifier = None
         new['visible_if_field'] = identifier
@@ -150,6 +165,35 @@ class Fields(object):
         if value:
             value = '|'.join([s.strip() for s in value.split('|') if s.strip()])
         new['visible_if_value'] = value
+        # Set the possible values for menu or radiobuttons field.
+        if field['type'] == constants.SELECT:
+            values = rqh.get_argument('select', '').split('\n')
+            values = [v.strip() for v in values]
+            values = [v for v in values if v]
+            new['select'] = values
+            new['display'] = rqh.get_argument('display', None) or 'menu'
+        # Set the possible values for a multiselect field.
+        elif field['type'] == constants.MULTISELECT:
+            values = rqh.get_argument('multiselect', '').split('\n')
+            values = [v.strip() for v in values]
+            values = [v for v in values if v]
+            new['multiselect'] = values
+        # Set the column identifiers for a table field.
+        elif field['type'] == constants.TABLE:
+            values = rqh.get_argument('table', '').split('\n')
+            values = [v.strip() for v in values]
+            values = [v for v in values if v]
+            new['table'] = values
+        # Represent the boolean by a checkbox or a menu.
+        elif field['type'] == constants.BOOLEAN:
+            new['checkbox'] = utils.to_bool(rqh.get_argument('checkbox', None))
+        # Set the new processor field value.
+        name = rqh.get_argument('processor', None)
+        if name and name in settings['PROCESSORS']:
+            new['processor'] = name
+        else:
+            new['processor'] = None
+        # Record the changes.
         old = field.copy()
         field.update(new)
         diff = dict(identifier=field['identifier'])
@@ -157,6 +201,7 @@ class Fields(object):
             if key == 'fields': continue
             if old.get(key) != value:
                 diff[key] = value
+        # Set a new parent; change the field's group.
         new_parent = rqh.get_argument('parent', '')
         if new_parent:
             if new_parent == '[top level]':
@@ -178,41 +223,33 @@ class Fields(object):
                 old_parent['fields'].remove(field)
             if new_parent == -1:
                 self.form['fields'].append(field)
-                # diff['parent'] = field['parent'] = None
                 diff['parent'] = None
             else:
                 new_parent['fields'].append(field)
-                # diff['parent'] = field['parent'] = new_parent['identifier']
                 diff['parent'] = new_parent['identifier']
-            # This is required to refresh the parent and depth entries
+            # This is required to refresh the parent and depth entries.
             self.flatten()
-        # Moving a field is relevant only if parent stays the same.
+        # Repositioning a field is relevant only if parent stays the same.
         else:
-            move = rqh.get_argument('move', '').lower()
-            if move:
+            try:
+                position = rqh.get_argument('position')
+                if not position: raise ValueError
+            except (tornado.web.MissingArgumentError, ValueError):
+                pass
+            else:
                 siblings = self.get_siblings(field, self.form['fields'])
-                if move == 'first':
-                    siblings.remove(field)
+                siblings.remove(field)
+                if position == '__first__':
                     siblings.insert(0, field)
-                elif move == 'previous':
-                    pos = siblings.index(field)
-                    if pos > 0:
-                        siblings.remove(field)
-                        pos -= 1
-                        siblings.insert(pos, field)
-                elif move == 'next':
-                    pos = siblings.index(field)
-                    if pos < len(siblings) - 1:
-                        siblings.remove(field)
-                        pos += 1
-                        siblings.insert(pos, field)
-                elif move == 'last':
-                    siblings.remove(field)
-                    siblings.append(field)
                 else:
-                    move = None
-                if move:
-                    diff['move'] = move
+                    for pos, sib in enumerate(siblings):
+                        if sib['identifier'] == position:
+                            siblings.insert(pos+1, field)
+                            break
+                    else:
+                        siblings.append(field)
+                        position = '__last__'
+                diff['position'] = position
         return diff
 
     def delete(self, identifier):
