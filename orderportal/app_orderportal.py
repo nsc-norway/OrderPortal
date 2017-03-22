@@ -27,6 +27,8 @@ from orderportal.file import *
 from orderportal.event import *
 from orderportal.search import *
 
+from orderportal.nsc_order_package import *
+
 
 def main():
     parser = utils.get_command_line_parser(description='OrderPortal server.')
