@@ -100,7 +100,7 @@
   </form>
   {% end %} {# for target in targets #}
   {% else %}
-  {% if order['invalid'] or not order.get('samples_valid') %}
+  {% if order['invalid'] %}
   <div class="well well-lg text-danger">
     {{ term('Order') }} cannot be submitted due to invalid or missing values.
   </div>
@@ -195,28 +195,6 @@
 	<th>IUID</th>
 	<td>{{ order['_id'] }}</td>
       </tr>
-      <tr>
-	<th>Samples</th>
-	<td>{{ 'No' if not samples else len(samples) }} samples -
-    {% if order.get('samples_valid') %}
-      <span class="text-success">
-        <span class="glyphicon glyphicon-ok"></span>
-        OK</span>
-    {% else %}
-      <span class="text-danger">
-        <span class="glyphicon glyphicon-remove"></span>
-        Incomplete information</span>
-    {% end %}
-    {% if is_editable %}
-    <div>
-      <a href="{{ reverse_url('nsc_order_samples', order['_id']) }}">
-        View/edit sample information...
-      </a>
-    </div>
-    {% end %}
-  </td>
-      </tr>
-
       <tr>
 	<th>Files</th>
 	<td colspan="2">

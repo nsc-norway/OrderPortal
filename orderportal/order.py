@@ -494,7 +494,6 @@ class OrderApiV1Mixin:
         item['links'] = dict(
             self=dict(href=self.order_reverse_url(order, api=True)),
             display=dict(href=self.order_reverse_url(order)))
-        item['samples'] = order.get('samples', [])
         return item
 
 
@@ -631,7 +630,6 @@ class Order(OrderMixin, RequestHandler):
                     status=self.get_order_status(order),
                     form=form,
                     fields=form['fields'],
-                    samples=order.get('samples', []),
                     attached_files=files,
                     is_editable=self.is_admin() or self.is_editable(order),
                     is_clonable=self.is_clonable(order),
@@ -671,23 +669,6 @@ class OrderApiV1(ApiV1Mixin, OrderApiV1Mixin, Order):
                              item=data)
         data['fields'] = order['fields']
         data['invalid'] = order['invalid']
-        files = []
-        if self.get_argument('full', False):
-            if self.is_attachable(order):
-                for filename in order.get('_attachments', []):
-                    stub = order['_attachments'][filename]
-                    content = self.db.get_attachment(order, filename).read()
-                    files.append(dict(filename=filename,
-                                      size=stub['length'],
-                                      content_type=stub['content_type'],
-                                      content=base64.b64encode(content)))
-                files.sort(lambda i,j: cmp(i['filename'].lower(),
-                                           j['filename'].lower()))
-            data['files'] = files
-            data['samples'] = order.get('samples', [])
-            self.set_header('Content-Type', "application/json")
-            self.set_header('Content-Disposition',
-                            'attachment; filename="{0}.json"'.format(order['_id']))
         self.write(data)
 
 
