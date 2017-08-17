@@ -7,12 +7,12 @@ from __future__ import print_function, absolute_import
 import os
 
 
-__version__ = '2.9.2'
+__version__ = '3.3.7'
 
 # Default settings, may be changed in a settings YAML file.
 settings = dict(
     ROOT=os.path.dirname(__file__),
-    BASE_URL='http://localhost:8885/',
+    BASE_URL='http://localhost/',
     TORNADO_DEBUG=False,
     LOGGING_DEBUG=False,
     LOGGING_FORMAT='%(levelname)s [%(asctime)s] %(message)s',
@@ -25,7 +25,7 @@ settings = dict(
     BOOTSTRAP_CSS_URL='https://maxcdn.bootstrapcdn.com/bootstrap/3.3.6/css/bootstrap.min.css',
     BOOTSTRAP_JS_URL='https://maxcdn.bootstrapcdn.com/bootstrap/3.3.6/js/bootstrap.min.js',
     JQUERY_HOME='https://jquery.com/',
-    JQUERY_URL='https://code.jquery.com/jquery-1.12.3.min.js',
+    JQUERY_URL='https://code.jquery.com/jquery-1.12.4.min.js',
     JQUERY_UI_HOME='https://jqueryui.com/',
     JQUERY_UI_URL='https://code.jquery.com/ui/1.11.4/jquery-ui.min.js',
     JQUERY_UI_THEME_URL='https://code.jquery.com/ui/1.11.4/themes/smoothness/jquery-ui.css',
@@ -43,8 +43,7 @@ settings = dict(
     DISPLAY_ORDERS_MOST_RECENT=500,
     DISPLAY_MAX_PENDING_ACCOUNTS=10,
     DISPLAY_DEFAULT_MAX_LOG=20,
-    INITIAL_TEXTS_FILEPATH='{SITE_DIR}/initial_texts.yaml',
-    ACCOUNT_MESSAGES_FILEPATH='{SITE_DIR}/account_messages.yaml',
+    DISPLAY_MAX_NEWS=4,
     ORDER_STATUSES_FILEPATH='{SITE_DIR}/order_statuses.yaml',
     ORDER_TRANSITIONS_FILEPATH='{SITE_DIR}/order_transitions.yaml',
     ORDER_USER_TAGS=True,
@@ -52,7 +51,9 @@ settings = dict(
     ORDERS_LIST_TAGS=True,
     ORDERS_LIST_FIELDS=[],
     ORDERS_LIST_STATUSES=[],
+    # XXX To be removed
     ORDER_MESSAGES_FILEPATH='{SITE_DIR}/order_messages.yaml',
+    ACCOUNT_INVOICE_INFO=True,
     ACCOUNT_FUNDER_INFO=True,
     ACCOUNT_FUNDER_INFO_GENDER=True,
     ACCOUNT_FUNDER_INFO_GROUP_SIZE=True,
@@ -64,4 +65,7 @@ settings = dict(
     SUBJECT_TERMS_FILEPATH='{SITE_DIR}/subjects.yaml',
     DOCUMENTATION_URL='https://github.com/pekrau/OrderPortal/wiki',
     MARKDOWN_URL='http://daringfireball.net/projects/markdown/syntax',
+    # For database initialization only; ignored after that.
+    INITIAL_TEXTS_FILEPATH='{SITE_DIR}/initial_texts.yaml',
+    INITIAL_ORDER_MESSAGES_FILEPATH='{SITE_DIR}/initial_order_messages.yaml',
     )

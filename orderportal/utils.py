@@ -1,4 +1,4 @@
-"OrderPortal: Various utility functions."
+"Various utility functions."
 
 from __future__ import print_function, absolute_import
 
@@ -60,7 +60,8 @@ def load_settings(filepath=None):
         hostname = socket.gethostname().split('.')[0]
         basedir = os.path.dirname(__file__)
         for filepath in [os.path.join(basedir, "{0}.yaml".format(hostname)),
-                         os.path.join(basedir, 'default.yaml')]:
+                         os.path.join(basedir, 'default.yaml'),
+                         os.path.join(basedir, 'settings.yaml')]:
             if os.path.exists(filepath) and os.path.isfile(filepath):
                 break
         else:
@@ -69,7 +70,8 @@ def load_settings(filepath=None):
     with open(filepath) as infile:
         settings.update(yaml.safe_load(infile))
     settings['SETTINGS_FILEPATH'] = filepath
-    # Set ROOT as the current working dir
+    # Set current working dir to be ROOT while reading the files
+    orig_dir = os.getcwd()
     os.chdir(settings['ROOT'])
     # Expand environment variables (ROOT, SITE_DIR) once and for all
     for key, value in settings.items():
@@ -95,10 +97,8 @@ def load_settings(filepath=None):
     logging.basicConfig(**kwargs)
     logging.info("OrderPortal version %s", orderportal.__version__)
     logging.info("settings from %s", settings['SETTINGS_FILEPATH'])
-    if settings['LOGGING_DEBUG']:
-        logging.info('logging debug')
-    if settings['TORNADO_DEBUG']:
-        logging.info('tornado debug')
+    logging.info("logging debug %s", settings['LOGGING_DEBUG'])
+    logging.info("tornado debug %s", settings['TORNADO_DEBUG'])
     # Check settings
     for key in ['BASE_URL', 'DB_SERVER', 'COOKIE_SECRET', 'DATABASE']:
         if key not in settings:
@@ -126,8 +126,9 @@ def load_settings(filepath=None):
                    entity != BaseProcessor:
                     name = entity.__module__ + '.' + entity.__name__
                     settings['PROCESSORS'][name] = entity
-                    logging.info("loaded processor %s", name)
+                    logging.debug("loaded processor %s", name)
     # Read order state definitions and transitions
+    logging.debug("Order statuses from %s", settings['ORDER_STATUSES_FILEPATH'])
     with open(settings['ORDER_STATUSES_FILEPATH']) as infile:
         settings['ORDER_STATUSES'] = yaml.safe_load(infile)
     settings['ORDER_STATUSES_LOOKUP'] = lookup = dict()
@@ -141,26 +142,10 @@ def load_settings(filepath=None):
     if not initial:
         raise ValueError('No initial order status defined.')
     settings['ORDER_STATUS_INITIAL'] = initial
+    logging.debug("Order transitions from %s", 
+                  settings['ORDER_TRANSITIONS_FILEPATH'])
     with open(settings['ORDER_TRANSITIONS_FILEPATH']) as infile:
         settings['ORDER_TRANSITIONS'] = yaml.safe_load(infile)
-    # Account messages
-    try:
-        filepath = settings['ACCOUNT_MESSAGES_FILEPATH']
-        if not filepath: raise KeyError
-    except KeyError:
-        settings['ACCOUNT_MESSAGES'] = dict()
-    else:
-        with open(filepath) as infile:
-            settings['ACCOUNT_MESSAGES'] = yaml.safe_load(infile)
-    # Order messages
-    try:
-        filepath = settings['ORDER_MESSAGES_FILEPATH']
-        if not filepath: raise KeyError
-    except KeyError:
-        settings['ORDER_MESSAGES'] = dict()
-    else:
-        with open(filepath) as infile:
-            settings['ORDER_MESSAGES'] = yaml.safe_load(infile)
     # Read universities lookup
     try:
         filepath = settings['UNIVERSITIES_FILEPATH']
@@ -168,11 +153,11 @@ def load_settings(filepath=None):
     except KeyError:
         settings['UNIVERSITIES'] = dict()
     else:
+        logging.debug("Universities lookup from %s", filepath)
         with open(filepath) as infile:
             unis = yaml.safe_load(infile)
         unis = unis.items()
-        unis.sort(lambda i,j: cmp((i[1].get('rank'), i[0]),
-                                  (j[1].get('rank'), j[0])))
+        unis.sort(key=lambda i: (i[1].get('rank'), i[0]))
         settings['UNIVERSITIES'] = collections.OrderedDict(unis)
     # Read country codes
     try:
@@ -181,6 +166,7 @@ def load_settings(filepath=None):
     except KeyError:
         settings['COUNTRIES'] = []
     else:
+        logging.debug("Country codes from %s", filepath)
         with open(filepath) as infile:
             settings['COUNTRIES'] = yaml.safe_load(infile)
         settings['COUNTRIES_LOOKUP'] = dict([(c['code'], c['name'])
@@ -192,12 +178,13 @@ def load_settings(filepath=None):
     except KeyError:
         settings['subjects'] = []
     else:
+        logging.debug("Subject terms from %s", filepath)
         with open(filepath) as infile:
             settings['subjects'] = yaml.safe_load(infile)
     settings['subjects_lookup'] = dict([(s['code'], s['term'])
                                         for s in settings['subjects']])
     # Settings computable from others
-    settings['DB_SERVER_VERSION'] = couchdb.Server(settings['DB_SERVER']).version()
+    settings['DB_SERVER_VERSION'] = get_dbserver().version()
     if 'PORT' not in settings:
         parts = urlparse.urlparse(settings['BASE_URL'])
         items = parts.netloc.split(':')
@@ -209,8 +196,10 @@ def load_settings(filepath=None):
             settings['PORT'] =  443
         else:
             raise ValueError('Could not determine port from BASE_URL.')
+    # Set back current working dir
+    os.chdir(orig_dir)
 
-def term(word):
+def terminology(word):
     "Return the display term for the given word. Use itself by default."
     try:
         istitle = word.istitle()
@@ -319,9 +308,32 @@ def convert(type, value):
     else:
         return value
 
-def cmp_modified(i, j):
-    "Compare the two documents by their 'modified' values."
-    return cmp(i['modified'], j['modified'])
+def get_json(id, type):
+    "Return the initialized JSON dictionary with id and type."
+    result = collections.OrderedDict()
+    result['id'] = id
+    result['type'] = type
+    result['site'] = settings['SITE_NAME']
+    result['timestamp'] = timestamp()
+    return result
+
+def get_account_name(account=None, value=None):
+    """Return person name of accountas 'lastname, firstname'.
+    'account' is an account document.
+    'value' is a row value from a view."""
+    if account is not None:
+        last_name = account.get('last_name')
+        first_name = account.get('first_name')
+    elif value is not None:
+        first_name, last_name = value
+    if last_name:
+        if first_name:
+            name = u"{0}, {1}".format(last_name, first_name)
+        else:
+            name = last_name
+    else:
+        name = first_name
+    return name
 
 def absolute_path(filename):
     "Return the absolute path given the current directory."

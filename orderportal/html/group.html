@@ -8,7 +8,7 @@
 
 {% extends "base.html" %}
 
-{% block meta_content %}
+{% block action_content %}
 
 {% if is_editable %}
 <br>
@@ -52,11 +52,11 @@
 #}
 {% end %} {# if is_editable #}
 
-{% end %} {# block meta_content #}
+{% end %} {# block action_content #}
 
 {% block main_content %}
 <div class="well">
-  A member of a group may read <strong>any</strong> {{ term('order') }}
+  A member of a group may read <strong>any</strong> {{ terminology('order') }}
   of another member of that group. This feature is therefore suitable
   for true working groups, but <strong>not</strong> for granting access
   to the occasional collaborative project.

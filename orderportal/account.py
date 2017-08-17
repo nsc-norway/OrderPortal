@@ -1,4 +1,4 @@
-"OrderPortal: Account and login pages."
+"Account and login pages."
 
 from __future__ import print_function, absolute_import
 
@@ -60,37 +60,33 @@ class AccountSaver(saver.Saver):
 
 
 class Accounts(RequestHandler):
-    "Accounts list page; just HTML, Datatables obtains data via API call."
+    "Accounts list page."
 
     @tornado.web.authenticated
     def get(self):
-        """HTML template output.
-        Uses DataTables which calls the API to get accounts."""
         self.check_staff()
-        self.render('accounts.html', params=self.get_filter_params())
+        self.set_filter()
+        self.render('accounts.html', 
+                    accounts=self.get_accounts(),
+                    filter=self.filter)
 
-    def get_filter_params(self):
-        "Return a dictionary with the given filter parameters."
-        result = dict()
+    def set_filter(self):
+        "Set the filter parameters dictionary."
+        self.filter = dict()
         for key in ['university', 'status', 'role']:
             try:
                 value = self.get_argument(key)
                 if not value: raise KeyError
-                result[key] = value
+                self.filter[key] = value
             except (tornado.web.MissingArgumentError, KeyError):
                 pass
-        return result
-
-
-class _AccountsFilter(Accounts):
-    "Get accounts according to filter parameters."
 
     def get_accounts(self):
         "Get the accounts."
-        accounts = self.filter_by_university(self.params.get('university'))
-        accounts = self.filter_by_role(self.params.get('role'),
+        accounts = self.filter_by_university(self.filter.get('university'))
+        accounts = self.filter_by_role(self.filter.get('role'),
                                        accounts=accounts)
-        accounts = self.filter_by_status(self.params.get('status'),
+        accounts = self.filter_by_status(self.filter.get('status'),
                                          accounts=accounts)
         # No filter; all accounts
         if accounts is None:
@@ -105,6 +101,7 @@ class _AccountsFilter(Accounts):
         counts = dict([(r.key[0], r.value) for r in view])
         for account in accounts:
             account['order_count'] = counts.get(account['email'], 0)
+            account['name'] = utils.get_account_name(account=account)
         return accounts
 
     def filter_by_university(self, university, accounts=None):
@@ -151,17 +148,20 @@ class _AccountsFilter(Accounts):
         return accounts
 
 
-class AccountsApiV1(_AccountsFilter):
+class AccountsApiV1(Accounts):
     "Accounts API; JSON output."
 
-    @tornado.web.authenticated
     def get(self):
         "JSON output."
         URL = self.absolute_reverse_url
         self.check_staff()
-        self.params = self.get_filter_params()
+        self.set_filter()
         accounts = self.get_accounts()
-        items = []
+        data = utils.get_json(URL('accounts_api', **self.filter), 'accounts')
+        data['filter'] = self.filter
+        data['links'] = dict(api=dict(href=URL('accounts_api')),
+                             display=dict(href=URL('accounts')))
+        data['items'] = []
         for account in accounts:
             item = OD()
             item['email'] = account['email']
@@ -182,9 +182,7 @@ class AccountsApiV1(_AccountsFilter):
             item['gender'] = account.get('gender')
             item['university'] = account.get('university')
             item['role'] = account['role']
-            item['status'] = dict(
-                name=account['status'],
-                image=dict(href=self.static_url(account['status']+'.png')))
+            item['status'] = account['status']
             item['address'] = account.get('address') or {}
             item['invoice_ref'] = account.get('invoice_ref')
             item['invoice_address'] = account.get('invoice_address') or {}
@@ -195,27 +193,22 @@ class AccountsApiV1(_AccountsFilter):
                 links=dict(
                     display=dict(href=URL('account_orders', account['email'])),
                     api=dict(href=URL('account_orders_api', account['email']))))
-            items.append(item)
-        data = OD()
-        data['type'] = 'accounts'
-        data['links'] = links = OD()
-        links['self'] = dict(href=URL('accounts_api', **self.params))
-        links['display'] = dict(href=URL('accounts', **self.params))
-        data['items'] = items
+            data['items'].append(item)
         self.write(data)
 
 
-class AccountsCsv(_AccountsFilter):
+class AccountsCsv(Accounts):
     "Return a CSV file containing all data for all or filtered set of accounts."
 
     @tornado.web.authenticated
     def get(self):
         "CSV file output."
         self.check_staff()
-        self.params = self.get_filter_params()
+        self.set_filter()
         accounts = self.get_accounts()
         csvfile = StringIO()
         writer = csv.writer(csvfile)
+        writer.writerow((settings['SITE_NAME'], utils.timestamp()))
         writer.writerow(('Email', 'Last name', 'First name', 'Role', 'Status',
                          'Order count', 'University', 'Department', 'PI',
                          'Gender', 'Group size', 'Subject', 'Address', 'Zip',
@@ -388,16 +381,17 @@ class Account(AccountMixin, RequestHandler):
 class AccountApiV1(AccountMixin, RequestHandler):
     "Account API; JSON output."
 
-    @tornado.web.authenticated
     def get(self, email):
         URL = self.absolute_reverse_url
         try:
             account = self.get_account(email)
+        except ValueError, msg:
+            raise tornado.web.HTTPError(404, reason=str(msg))
+        try:
             self.check_readable(account)
         except ValueError, msg:
             raise tornado.web.HTTPError(403, reason=str(msg))
-        data = OD()
-        data['type'] = 'account'
+        data = utils.get_json(URL('account', email), 'account')
         data['email'] = account['email']
         name = last_name = account.get('last_name')
         first_name = account.get('first_name')
@@ -407,7 +401,7 @@ class AccountApiV1(AccountMixin, RequestHandler):
         else:
             name = first_name
         data['links'] = dict(
-            self=dict(href=URL('account_api', account['email'])),
+            api=dict(href=URL('account_api', account['email'])),
             display=dict(href=URL('account', account['email'])))
         data['name'] = name
         data['first_name'] = first_name
@@ -454,6 +448,18 @@ class AccountOrdersMixin(object):
         if self.is_readable(account): return
         raise ValueError('You may not view these orders.')
 
+    def get_group_orders(self, account):
+        "Return all orders for the accounts in the account's group."
+        orders = []
+        for colleague in self.get_account_colleagues(account['email']):
+            view = self.db.view('order/owner',
+                                reduce=False,
+                                include_docs=True,
+                                startkey=[colleague],
+                                endkey=[colleague, constants.CEILING])
+            orders.extend([r.doc for r in view])
+        return orders
+
 
 class AccountOrders(AccountOrdersMixin, RequestHandler):
     "Page for a list of all orders for an account."
@@ -472,9 +478,19 @@ class AccountOrders(AccountOrdersMixin, RequestHandler):
             order_column = 3
         order_column += len(settings['ORDERS_LIST_STATUSES']) + \
             len(settings['ORDERS_LIST_FIELDS'])
+        view = self.db.view('order/owner',
+                            reduce=False,
+                            include_docs=True,
+                            startkey=[account['email']],
+                            endkey=[account['email'], constants.CEILING])
+        orders = [r.doc for r in view]
         self.render('account_orders.html',
-                    order_column=order_column,
+                    all_forms=self.get_forms_titles(all=True),
+                    form_titles=sorted(self.get_forms_titles().values()),
+                    orders=orders,
                     account=account,
+                    order_column=order_column,
+                    account_names=self.get_account_names(),
                     any_groups=bool(self.get_account_groups(account['email'])))
 
 
@@ -483,30 +499,32 @@ class AccountOrdersApiV1(AccountOrdersMixin,
                          RequestHandler):
     "Account orders API; JSON output."
 
-    @tornado.web.authenticated
     def get(self, email):
         "JSON output."
         URL = self.absolute_reverse_url
         try:
             account = self.get_account(email)
+        except ValueError, msg:
+            raise tornado.web.HTTPError(404, reason=str(msg))
+        try:
             self.check_readable(account)
         except ValueError, msg:
             raise tornado.web.HTTPError(403, reason=str(msg))
         # Get names and forms lookups
         names = self.get_account_names()
-        forms = dict([(f[1], f[0]) for f in self.get_forms(all=True)])
-        data = OD()
-        data['type'] = 'account orders'
+        forms = self.get_forms_titles(all=True)
+        data = utils.get_json(URL('account_orders', account['email']),
+                              'account orders')
         data['links'] = dict(
-            self=dict(href=URL('account_orders_api', account['email'])),
+            api=dict(href=URL('account_orders_api', account['email'])),
             display=dict(href=URL('account_orders', account['email'])))
         view = self.db.view('order/owner',
                             reduce=False,
                             include_docs=True,
                             startkey=[account['email']],
                             endkey=[account['email'], constants.CEILING])
-        data['items'] = [self.get_json(r.doc, names=names, forms=forms)
-                         for r in view]
+        data['orders'] = [self.get_order_json(r.doc, names, forms)
+                          for r in view]
         self.write(data)
 
 
@@ -528,8 +546,10 @@ class AccountGroupsOrders(AccountOrdersMixin, RequestHandler):
         order_column += len(settings['ORDERS_LIST_STATUSES']) + \
             len(settings['ORDERS_LIST_FIELDS'])
         self.render('account_groups_orders.html',
-                    order_column=order_column,
-                    account=account)
+                    account=account,
+                    all_forms=self.get_forms_titles(all=True),
+                    orders=self.get_group_orders(account),
+                    order_column=order_column)
 
 
 class AccountGroupsOrdersApiV1(AccountOrdersMixin, 
@@ -537,33 +557,27 @@ class AccountGroupsOrdersApiV1(AccountOrdersMixin,
                                RequestHandler):
     "Account group orders API; JSON output."
 
-    @tornado.web.authenticated
     def get(self, email):
         "JSON output."
         URL = self.absolute_reverse_url
         try:
             account = self.get_account(email)
+        except ValueError, msg:
+            raise tornado.web.HTTPError(404, reason=str(msg))
+        try:
             self.check_readable(account)
         except ValueError, msg:
             raise tornado.web.HTTPError(403, reason=str(msg))
-        orders = []
-        for colleague in self.get_account_colleagues(account['email']):
-            view = self.db.view('order/owner',
-                                reduce=False,
-                                include_docs=True,
-                                startkey=[colleague],
-                                endkey=[colleague, constants.CEILING])
-            orders.extend([r.doc for r in view])
         # Get names and forms lookups
         names = self.get_account_names()
-        forms = dict([(f[1], f[0]) for f in self.get_forms(all=True)])
-        data = OD()
-        data['type'] = 'account groups orders'
+        forms = self.get_forms_titles(all=True)
+        data =utils.get_json(URL('account_groups_orders_api',account['email']),
+                             'account groups orders')
         data['links'] = dict(
-            self=dict(href=URL('account_orders_api', account['email'])),
-            display=dict(href=URL('account_orders', account['email'])))
-        data['items'] = [self.get_json(o, names=names, forms=forms)
-                         for o in orders]
+            api=dict(href=URL('account_groups_orders_api', account['email'])),
+            display=dict(href=URL('account_groups_orders', account['email'])))
+        data['orders'] = [self.get_order_json(o, names, forms)
+                          for o in self.get_group_orders(account)]
         self.write(data)
 
 
@@ -598,20 +612,16 @@ class AccountMessages(AccountMixin, RequestHandler):
         view = self.db.view('message/recipient',
                             startkey=[account['email']],
                             endkey=[account['email'], constants.CEILING])
-        page = self.get_page(view=view)
         view = self.db.view('message/recipient',
                             descending=True,
                             startkey=[account['email'], constants.CEILING],
                             endkey=[account['email']],
-                            skip=page['start'],
-                            limit=page['size'],
                             reduce=False,
                             include_docs=True)
         messages = [r.doc for r in view]
         self.render('account_messages.html',
                     account=account,
-                    messages=messages,
-                    page=page)
+                    messages=messages)
 
 
 class AccountEdit(AccountMixin, RequestHandler):
@@ -731,7 +741,7 @@ class Login(RequestHandler):
                       ' disabled. You must contact the site administrators.'
                 # Prepare message sent by cron job script 'script/messenger.py'
                 try:
-                    template = settings['ACCOUNT_MESSAGES']['disabled']
+                    template = self.db['account_messages']['disabled']
                 except KeyError:
                     pass
                 else:
@@ -752,7 +762,8 @@ class Login(RequestHandler):
            and account['role'] != constants.ADMIN:
             self.see_other('home', error='Login is currently disabled.')
             return
-        self.set_secure_cookie(constants.USER_COOKIE, account['email'],
+        self.set_secure_cookie(constants.USER_COOKIE, 
+                               account['email'],
                                expires_days=settings['LOGIN_MAX_AGE_DAYS'])
         with AccountSaver(doc=account, rqh=self) as saver:
             saver['login'] = utils.timestamp() # Set login timestamp.
@@ -803,7 +814,7 @@ class Reset(RequestHandler):
                 saver.reset_password()
             # Prepare message sent by cron job script 'script/messenger.py'
             try:
-                template = settings['ACCOUNT_MESSAGES']['reset']
+                template = self.db['account_messages']['reset']
             except KeyError:
                 pass
             else:
@@ -845,9 +856,10 @@ class Password(RequestHandler):
             return
         if account.get('code') != self.get_argument('code'):
             self.see_other('home',
-                           error=
-"""Either the email address or the code for setting password was wrong.
- You should probably request a new code using the 'Reset password' button.""")
+                           error="Either the email address or the code" +
+                           " for setting password was wrong." +
+                           " Try to request a new code using the" +
+                           " 'Reset password' button.")
             return
         password = self.get_argument('password', '')
         try:
@@ -867,7 +879,8 @@ class Password(RequestHandler):
         with AccountSaver(doc=account, rqh=self) as saver:
             saver.set_password(password)
             saver['login'] = utils.timestamp() # Set login session.
-        self.set_secure_cookie(constants.USER_COOKIE, account['email'],
+        self.set_secure_cookie(constants.USER_COOKIE,
+                               account['email'],
                                expires_days=settings['LOGIN_MAX_AGE_DAYS'])
         if account.get('update_info'):
             self.see_other('account_edit', account['email'],
@@ -956,7 +969,7 @@ class Register(RequestHandler):
             return
         # Prepare message sent by cron job script 'script/messenger.py'
         try:
-            template = settings['ACCOUNT_MESSAGES']['pending']
+            template = self.db['account_messages']['pending']
         except KeyError:
             pass
         else:
@@ -993,7 +1006,7 @@ class AccountEnable(RequestHandler):
             saver.reset_password()
         # Prepare message sent by cron job script 'script/messenger.py'
         try:
-            template = settings['ACCOUNT_MESSAGES']['enabled']
+            template = self.db['account_messages']['enabled']
         except KeyError:
             pass
         else:

@@ -1,5 +1,5 @@
 #!/usr/bin/python2
-"OrderPortal: Web application server."
+"OrderPortal web application server."
 
 from __future__ import print_function, absolute_import
 
@@ -50,6 +50,8 @@ def main():
     handlers.extend([
         url(r'/order/([0-9a-f]{32})', Order, name='order'),
         url(r'/api/v1/order/([0-9a-f]{32})', OrderApiV1, name='order_api'),
+        url(r'/order/([^/]+).csv', OrderCsv, name='order_csv'),
+        url(r'/order/([^/]+).zip', OrderZip, name='order_zip'),
         url(r'/order/([0-9a-f]{32})/logs', OrderLogs, name='order_logs'),
         url(r'/order', OrderCreate, name='order_create'),
         url(r'/order/([0-9a-f]{32})/edit', OrderEdit, name='order_edit'),
@@ -58,10 +60,16 @@ def main():
         url(r'/api/v1/order/([0-9a-f]{32})/transition/(\w+)',
             OrderTransitionApiV1, name='order_transition_api'),
         url(r'/order/([0-9a-f]{32})/clone', OrderClone, name='order_clone'),
-        url(r'/order/([0-9a-f]{32})/file', OrderAttach, name='order_attach'),
-        url(r'/order/([0-9a-f]{32})/file/([^/]+)', OrderFile,name='order_file'),
+        url(r'/order/([0-9a-f]{32})/file', OrderFile, name='order_file_add'),
+        url(r'/order/([0-9a-f]{32})/file/([^/]+)',OrderFile,name='order_file'),
+        url(r'/order/([0-9a-f]{32})/report', OrderReport, name='order_report'),
+        url(r'/api/v1/order/([0-9a-f]{32})/report',
+            OrderReportApiV1, name='order_report_api'),
+        url(r'/order/([0-9a-f]{32})/report/edit',
+            OrderReportEdit, name='order_report_edit'),
         url(r'/orders', Orders, name='orders'),
         url(r'/api/v1/orders', OrdersApiV1, name='orders_api'),
+        url(r'/orders.csv', OrdersCsv, name='orders_csv'),
         url(r'/accounts', Accounts, name='accounts'),
         url(r'/api/v1/accounts', AccountsApiV1, name='accounts_api'),
         url(r'/accounts.csv', AccountsCsv, name='accounts_csv'),
@@ -114,15 +122,16 @@ def main():
         url(r'/form/([0-9a-f]{32})/field/([a-zA-Z][_a-zA-Z0-9]*)/descr',
             FormFieldEditDescr, name='field_edit_descr'),
         url(r'/form/([0-9a-f]{32})/orders', FormOrders, name='form_orders'),
-        url(r'/news', NewsCreate, name='news_create'),
-        url(r'/news/([0-9a-f]{32})', News, name='news'),
-        url(r'/event', EventCreate, name='event_create'),
+        url(r'/news', News, name='news'),
+        url(r'/new/([0-9a-f]{32})', NewsEdit, name='news_edit'),
+        url(r'/new', NewsCreate, name='news_create'),
+        url(r'/events', Events, name='events'),
         url(r'/event/([0-9a-f]{32})', Event, name='event'),
+        url(r'/event', EventCreate, name='event_create'),
         url(r'/contact', Contact, name='contact'),
         url(r'/about', About, name='about'),
-        url(r'/techinfo', TechInfo, name='techinfo'),
         url(r'/statistics', Statistics, name='statistics'),
-        url(r'/api/v1/statistics', StatisticsApiV1, name='statistics_api'),
+        url(r'/software', Software, name='software'),
         url(r'/infos', Infos, name='infos'),
         url(r'/info', InfoCreate, name='info_create'),
         url(r'/info/([^/]+)', Info, name='info'),
@@ -131,11 +140,12 @@ def main():
         url(r'/files', Files, name='files'),
         url(r'/file', FileCreate, name='file_create'),
         url(r'/file/([^/]+)', File, name='file'),
+        url(r'/file/([^/]+)/meta', FileMeta, name='file_meta'),
         url(r'/file/([^/]+)/download', FileDownload, name='file_download'),
         url(r'/file/([^/]+)/edit', FileEdit, name='file_edit'),
-        url(r'/api/v1/file/([^/]+)/edit', FileEditApiV1, name='file_edit_api'),
-        url(r'/file/([^/]+)/logs', FileLogs, name='file_logs'),
+        url(r'/file/([0-9a-f]{32})/logs', FileLogs, name='file_logs'),
         url(r'/text/([^/]+)', Text, name='text'),
+        url(r'/texts', Texts, name='texts'),
         url(r'/log/([0-9a-f]{32})', Log, name='log'),
         url(r'/([0-9a-f]{32})', Entity, name='entity'),
         url(r'/admin/search_fields', SearchFields, name='search_fields'),
@@ -143,6 +153,10 @@ def main():
         url(r'/admin/statuses', Statuses, name='statuses'),
         url(r'/admin/settings', Settings, name='settings'),
         url(r'/nsc/package/([0-9a-f]{32})', NscOrderPkgV1, name='nsc_order_package'),
+        url(r'/admin/order_messages',
+            AdminOrderMessages, name='admin_order_messages'),
+        url(r'/admin/account_messages',
+            AdminAccountMessages, name='admin_account_messages'),
         url(r'/site/([^/]+)', tornado.web.StaticFileHandler,
             {'path': settings['SITE_DIR']}, name='site'),
         ])
@@ -153,8 +167,8 @@ def main():
         cookie_secret=settings['COOKIE_SECRET'],
         xsrf_cookies=True,
         ui_modules=uimodules,
-        template_path='html',
-        static_path='static',
+        template_path=os.path.join(settings['ROOT'], 'html'),
+        static_path=os.path.join(settings['ROOT'], 'static'),
         login_url=r'/login')
     # Add href URLs for the status icons.
     # This depends on order status setup.

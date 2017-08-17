@@ -1,4 +1,4 @@
-"OrderPortal: Group pages."
+"Group pages; accounts which are able to see all orders of each other."
 
 from __future__ import print_function, absolute_import
 
@@ -24,18 +24,12 @@ class Groups(RequestHandler):
     @tornado.web.authenticated
     def get(self):
         self.check_staff()
-        page = self.get_page(view=self.db.view('group/modified'))
         view = self.db.view('group/modified',
                             descending=True,
-                            skip=page['start'],
-                            limit=page['size'],
                             reduce=False,
                             include_docs=True)
         groups = [r.doc for r in view]
-        self.render('groups.html',
-                    groups=groups,
-                    params=dict(),
-                    page=page)
+        self.render('groups.html', groups=groups)
 
 
 class GroupMixin(object):

@@ -1,12 +1,12 @@
 {# Home page for a logged in user having role 'user'. #}
 
-{% extends "home.html" %}
+{% extends "home_base.html" %}
 
 {% block content_left %}
 
 <div class="panel panel-default">
   <div class="panel-heading">
-    My recently modified {{ term('orders') }}
+    My recently modified {{ terminology('orders') }}
   </div>
   <div class="panel-body">
     <table class="table-condensed">
@@ -24,11 +24,3 @@
 </div>
 
 {% end %} {# block content_left #}
-
-{% block javascript_autofocus %}
-<script>
-  $(document).ready(function(){
-    $("#term").focus();
-  });
-</script>
-{% end %}

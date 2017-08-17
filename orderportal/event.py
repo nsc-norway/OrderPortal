@@ -1,4 +1,4 @@
-"OrderPortal: Event handling."
+"Event list handling; meeting and seminar announcements for home page."
 
 from __future__ import print_function, absolute_import
 
@@ -60,3 +60,10 @@ class Event(RequestHandler):
             return
         self.db.delete(event)
         self.see_other('home')
+
+
+class Events(RequestHandler):
+    "List of all events."
+
+    def get(self):
+        self.render('events.html', events=self.get_events())

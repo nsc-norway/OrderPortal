@@ -1,4 +1,4 @@
-"OrderPortal: Admin pages."
+"Admin pages."
 
 from __future__ import print_function, absolute_import
 
@@ -29,7 +29,7 @@ class Text(RequestHandler):
             text = self.get_entity_view('text/name', name)
         except tornado.web.HTTPError:
             text = dict(name=name)
-        origin = self.get_argument('origin', self.absolute_reverse_url('home'))
+        origin = self.get_argument('origin', self.absolute_reverse_url('texts'))
         self.render('text.html', text=text, origin=origin)
 
     @tornado.web.authenticated
@@ -41,8 +41,17 @@ class Text(RequestHandler):
             text = dict(name=name)
         with TextSaver(doc=text, rqh=self) as saver:
             saver['text'] = self.get_argument('text')
-        url = self.get_argument('origin', self.absolute_reverse_url('home'))
+        url = self.get_argument('origin', self.absolute_reverse_url('texts'))
         self.redirect(url, status=303)
+
+
+class Texts(RequestHandler):
+    "Page listing texts used in the web site."
+
+    @tornado.web.authenticated
+    def get(self):
+        self.check_admin()
+        self.render('texts.html', texts=sorted(constants.TEXTS.items()))
 
 
 class Statuses(RequestHandler):
@@ -74,8 +83,6 @@ class Settings(RequestHandler):
                   ('Site directory', settings['SITE_DIR']),
                   ('Tornado debug', settings['TORNADO_DEBUG']),
                   ('logging debug', settings['LOGGING_DEBUG']),
-                  ('account messages', settings['ACCOUNT_MESSAGES_FILEPATH']),
-                  ('order messages', settings['ORDER_MESSAGES_FILEPATH']),
                   ('order statuses', settings['ORDER_STATUSES_FILEPATH']),
                   ('order transitions', settings['ORDER_TRANSITIONS_FILEPATH']),
                   ('universities', settings.get('UNIVERSITIES_FILEPATH')),
@@ -93,7 +100,6 @@ class GlobalModes(RequestHandler):
         self.check_admin()
         self.render('global_modes.html')
 
-    @tornado.web.authenticated
     def post(self):
         self.check_admin()
         try:
@@ -109,3 +115,29 @@ class GlobalModes(RequestHandler):
                 self.global_modes[constants.DOCTYPE] = constants.META
             self.db.save(self.global_modes)
         self.see_other('global_modes')
+
+
+class AdminOrderMessages(RequestHandler):
+    "Page for displaying order messages configuration."
+
+    @tornado.web.authenticated
+    def get(self):
+        self.check_admin()
+        self.render('admin_order_messages.html',
+                    order_messages=self.db['order_messages'])
+
+
+class AdminAccountMessages(RequestHandler):
+    "Page for displaying account messages configuration."
+
+    @tornado.web.authenticated
+    def get(self):
+        self.check_admin()
+        account_messages = self.db['account_messages']
+        # Add in the recipients, which are hardwired in code.
+        account_messages[constants.PENDING]['recipients'] = ['admin']
+        account_messages[constants.ENABLED]['recipients'] = ['account']
+        account_messages[constants.DISABLED]['recipients'] = ['account']
+        account_messages[constants.RESET]['recipients'] = ['account']
+        self.render('admin_account_messages.html',
+                    account_messages=account_messages)

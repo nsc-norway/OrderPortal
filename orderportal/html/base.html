@@ -3,20 +3,28 @@
   <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>{% block head_title %}OrderPortal{% end %}</title>
-    {% try %}
-      {% set url = reverse_url('site', settings['SITE_FAVICON']) %}
-    {% except KeyError %}
-      {% set url = static_url('orderportal_32.png') %}
-    {% end %}
-    <link rel="shortcut icon" type="image/png" href="{{ url }}">
+    <title>{% block head_title %}{{ settings['SITE_NAME'] }}{% end %}</title>
+    <link rel="shortcut icon" type="image/png"
+	  href="{{ reverse_url('site', settings['SITE_FAVICON']) }}">
     <link rel="stylesheet" type="text/css"
 	  href="{{ settings['JQUERY_UI_THEME_URL'] }}">
     <link rel="stylesheet" type="text/css"
 	  href="{{ settings['BOOTSTRAP_CSS_URL'] }}">
-    {% block header_css %}
-    {% end %}
+    <link rel="stylesheet" type="text/css"
+	  href="{{ settings['DATATABLES_CSS_URL'] }}">
     <link rel="stylesheet" href="{{ static_url('mods.css') }}">
+    {# NOTE: jQuery has to be loaded before bootstrap JS! #}
+    <script src="{{ settings['JQUERY_URL'] }}"></script>
+    <script src="{{ settings['JQUERY_UI_URL'] }}"></script>
+    <script src="{{ static_url('jquery.localtime-0.9.1.min.js') }}"></script>
+    <script defer src="{{ settings['BOOTSTRAP_JS_URL'] }}"></script>
+    <script defer src="{{ settings['DATATABLES_JS_URL'] }}"></script>
+    <script defer src="{{ settings['DATATABLES_BOOTSTRAP_JS_URL'] }}"></script>
+    <script>
+      $.datepicker.setDefaults({dateFormat: "yy-mm-dd"});
+      $(function(){ $(".datepicker").datepicker(); });
+    </script>
+
   </head>
 
   <body>
@@ -31,12 +39,7 @@
             <span class="icon-bar"></span>
 	  </button>
 	  <a class="navbar-brand" href="{{ reverse_url('home') }}">
-	    {% try %}
-	      {% set url = reverse_url('site', settings['SITE_NAVBAR_ICON']) %}
-	    {% except KeyError %}
-	      {% set url = static_url('orderportal_32.png') %}
-	    {% end %}
-	    <img src="{{ url }}"
+	    <img src="{{ reverse_url('site', settings['SITE_NAVBAR_ICON']) }}"
 		 title="{{ settings['SITE_NAME'] }}"
 		 alt="{{ settings['SITE_NAME'] }}">
 	  </a>
@@ -50,11 +53,15 @@
 	    </li>
 	    {% if current_user %}
 	    {% if is_staff %}
-            <li><a href="{{ reverse_url('orders') }}">{{ term('Orders') }}</a></li>
+            <li>
+	      <a href="{{ reverse_url('orders') }}">
+		{{ terminology('Orders') }}
+	      </a>
+	    </li>
 	    {% else %}
 	    <li>
 	      <a href="{{ reverse_url('account_orders', current_user['email']) }}">
-		My {{ term('orders') }}
+		My {{ terminology('orders') }}
 	      </a>
 	    </li>
 	    {% end %} {# if is_staff #}
@@ -131,20 +138,26 @@
 		<li>
 		  <a href="{{ reverse_url('global_modes') }}">Global modes</a>
 		</li>
-		<li><a href="{{ reverse_url('statuses') }}">Statuses</a></li>
-		<li><a href="{{ reverse_url('settings') }}">Settings</a></li>
-		<li><a href="{{ reverse_url('techinfo') }}">Technical information</a></li>
-		<li class="dropdown-submenu">
-		  <a class="submenu" href="#">Texts
-		    <span class="caret"></span>
-		  </a>
-		  <ul class="dropdown-menu">
-		    {% for name in texts %}
-		    <li>
-		      <a href="{{ reverse_url('text', name) }}">{{ name }}</a>
-		    </li>
-		    {% end %}
-		  </ul>
+		<li>
+		  <a href="{{ reverse_url('statuses') }}">Statuses</a>
+		</li>
+		<li>
+		  <a href="{{ reverse_url('settings') }}">Settings</a>
+		</li>
+		<li>
+		  <a href="{{ reverse_url('admin_order_messages') }}">Order messages</a>
+		</li>
+		<li>
+		  <a href="{{ reverse_url('admin_account_messages') }}">Account messages</a>
+		</li>
+		<li>
+		  <a href="{{ reverse_url('statistics') }}">Statistics</a>
+		</li>
+		<li>
+		  <a href="{{ reverse_url('texts') }}">Texts</a>
+		</li>
+		<li>
+		  <a href="{{ reverse_url('software') }}">Software info</a>
 		</li>
 	      </ul>
 	    </li>
@@ -222,14 +235,13 @@
 	<div class="col-md-10">
 	  <h1>{% block body_title %}OrderPortal{% end %}</h1>
 	</div>
-	<div class="col-md-2">
-	  {% block body_header_meta %}
+	<div class="col-md-2 hidden-print">
+	  {% block body_header_alt_format %}
 	  {% end %}
 	</div>
       </div>
       {% end %} {# block body_header #}
 
-      {% block error %}
       {% try %}
       {% if error %}
       <div class="row">
@@ -240,9 +252,7 @@
       {% end %} {# if error #}
       {% except NameError %}
       {% end %} {# try #}
-      {% end %} {# block error #}
 
-      {% block message %}
       {% try %}
       {% if message %}
       <div class="row">
@@ -254,7 +264,6 @@
       {% end %} {# if message #}
       {% except NameError %}
       {% end %} {# try #}
-      {% end %} {# block message #}
 
       {% block content %}
       <div class="row">
@@ -262,45 +271,39 @@
 	  {% block main_content %}
 	  {% end %} {# block main_content #}
 	</div>
-	<div class="col-md-2">
-	  {% block meta_content %}
-	  {% end %} {# block meta_content #}
+	<div class="col-md-2 hidden-print">
+	  {% block action_content %}
+	  {% end %} {# block action_content #}
 	</div>
       </div>
       {% block sub_main_content %}
       {% end %} {# block sub_main_content #}
       {% end %} {# block content #}
 
-    </div>
+    </div> {# end of container for body content #}
 
-    {% block javascript_standard %}
-    {# NOTE: jQuery has to be loaded before bootstrap! #}
-    <script src="{{ settings['JQUERY_URL'] }}"></script>
-    <script src="{{ settings['JQUERY_UI_URL'] }}"></script>
-    <script src="{{ static_url('jquery.localtime-0.9.1.min.js') }}"></script>
-    <script src="{{ settings['BOOTSTRAP_JS_URL'] }}"></script>
-    <script>
-      $(document).ready(function(){
-        $('.dropdown-submenu a.submenu').on("click", function(e){
-          $(this).next('ul').toggle();
-          e.stopPropagation();
-          e.preventDefault();
-        });
-      });
-    </script>
-    <script>
-      $.datepicker.setDefaults({dateFormat: "yy-mm-dd"});
-      $(document).ready(function(){
-        $(".datepicker").datepicker();
-      });
-    </script>
-    {% end %} {# block javascript_standard #}
+    <div class="container-fluid">
+      <div class="row">
+	<div class="col-md-12">
+	  <hr>
+	  <div class="pull-left">
+	    <a href="{{ reverse_url('home') }}">
+	      <span class="glyphicon glyphicon-home"></span>
+	      {{ settings['SITE_NAME'] }}
+	    </a>
+	  </div>
+	  <div class="pull-right">
+	    <a href="{{ reverse_url('software') }}">
+	      OrderPortal version {{ version }}
+	    </a>
+	  </div>
+	</div>
+      </div>
+    </div>
 
     {% block javascript_autofocus %}
     <script>
-      $(document).ready(function(){
-        $("#term").focus();
-      });
+      $(function(){ $("#term").focus(); });
     </script>
     {% end %}
 

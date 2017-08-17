@@ -2,8 +2,14 @@
 
 {% extends "base.html" %}
 
-{% block head_title %}Edit {{ term('order') }} '{{ order['title'] }}'{% end %}
-{% block body_title %}Edit {{ term('order') }} '{{ order['title'] }}'{% end %}
+{% block head_title %}
+Edit {{ terminology('order') }} '{{ order['title'] }}'
+{% end %}
+
+{% block body_title %}
+Edit  {% module Icon('order') %}
+{{ terminology('order') }} '{{ order['title'] }}'
+{% end %}
 
 {% block content %}
 <h3>{{ form['title'] }}</h3>
@@ -11,21 +17,21 @@
 <div class="row">
   <div class="col-md-10">
     <span class="help-block">
-      You may save incomplete {{ term('orders') }}, but only complete
-      {{ term('orders') }} can be submitted.
+      You may save incomplete {{ terminology('orders') }}, but only complete
+      {{ terminology('orders') }} can be submitted.
       <a href="{{ settings['MARKDOWN_URL'] }}" target="_blank">Markdown</a>
       notation can be used in multi-line text input fields.
     </span>
   </div>
   <div class="col-md-2">
     <form action="{{ reverse_url('order', order['_id']) }}"
-	  class="myForm"
+	  class="allow_leaving_without_question"
 	  role="form"
 	  method="GET">
       <div class="form-group">
 	<button type="submit" class="btn btn-default btn-block">
 	  <span class="glyphicon glyphicon-remove"></span>
-	  Cancel edit
+	  Cancel
 	</button>
       </div>
     </form>
@@ -33,7 +39,7 @@
 </div>
 
 <form action="{{ reverse_url('order_edit', order['_id']) }}"
-      class="myForm"
+      class="allow_leaving_without_question"
       role="form"
       enctype="multipart/form-data"
       method="POST">
@@ -51,7 +57,7 @@
       </div>
     </div>
     <span class="help-block">
-      Brief, descriptive title for the {{ term('order') }}.
+      Brief, descriptive title for the {{ terminology('order') }}.
       It is not required to be unique, but it is a good idea
       to make it so anyway.
     </span>
@@ -74,11 +80,11 @@
       </div>
     </div>
     <span class="help-block">
-      Optional keywords (tags) characterizing the {{ term('order') }}.
-      Format as identifiers, i.e. start with a letter, continue with letters,
-      digits and/or underscore; no blanks allowed.
+      Optional keywords (tags) characterizing the {{ terminology('order') }}.
+      Format a tag as an identifier, i.e. start with a letter,
+      continue with letters, digits and/or underscore '_'.
       <br>
-      More than one tag is allowed using comma ',' as delimiter.
+      More than one tag is allowed; use blank or comma ',' as delimiter.
       {% if is_staff %}
       Staff may use namespace prefixes, e.g. "project_id:P12345".
       {% end %}
@@ -94,11 +100,12 @@
 	<input type="text" class="form-control"
 	       name="__owner__" id="__owner__"
 	       value="{{ order['owner'] }}">
+	{% elif is_staff %}
+	<p id="__owner__" class="form-control-static">{{ order['owner'] }}</p>
 	{% else %}
 	<select class="form-control" name="__owner__" id="__owner__">
 	  {% for colleague in colleagues %}
-	    {% set sel = colleague == current_user['email'] and 'selected' or '' %}
-	    <option {{ sel }}>{{ colleague }}</option>
+	    <option {{ colleague == current_user['email'] and 'selected' or '' }}>{{ colleague }}</option>
 	  {% end %}
 	</select>
 	{% end %}
@@ -106,13 +113,13 @@
     </div>
     <span class="help-block">
       {% if is_admin %}
-      The {{ term('order') }}'s owner specified by email address.
+      The {{ terminology('order') }}'s owner specified by email address.
       May be changed to another account.
       {% else %}
-      The {{ term('order') }}'s owner may be changed to an account
+      The {{ terminology('order') }}'s owner may be changed to an account
       in your groups.
       <strong>NOTE:</strong>
-      You will then no longer be able to edit the {{ term('order') }}.
+      You will then no longer be able to edit the {{ terminology('order') }}.
       {% end %}
     </span>
   </div>
@@ -124,7 +131,8 @@
     {# Fields must be allowed to influence others, even when hidden. #}
     {% for f in hidden_fields %}
     <input type="hidden" class="visible-if-source"
-	   name="{{ f }}" id="{{ f }}" value="{{ order['fields'].get(f)  or '' }}">
+	   name="{{ f }}" id="{{ f }}" 
+	   value="{% module NoneStr(order['fields'].get(f)) %}">
     {% end %}
   </div>
 
@@ -139,8 +147,6 @@
 
 {% block javascript_autofocus %}
 <script>
-  $(document).ready(function(){
-    $("#__title__").focus();
-  });
+  $(function(){ $("#__title__").focus(); });
 </script>
 {% end %}

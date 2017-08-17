@@ -1,4 +1,4 @@
-"OrderPortal: Form pages."
+"Forms are templates for orders."
 
 from __future__ import print_function, absolute_import
 
@@ -87,7 +87,7 @@ class Forms(FormMixin, RequestHandler):
         view = self.db.view('form/modified', descending=True, include_docs=True)
         title = 'Recent forms'
         forms = [r.doc for r in view]
-        names = self.get_account_names([f['owner'] for f in forms])
+        names = self.get_account_names()
         counts = dict([(f['_id'], self.get_order_count(f))
                        for f in forms])
         self.render('forms.html',
@@ -150,7 +150,7 @@ class FormApiV1(ApiV1Mixin, Form):
         data = OD()
         data['type'] = 'form'
         data['iuid'] = form['_id']
-        data['title'] = form.get('title')
+        data['title'] = form['title']
         data['version'] = form.get('version')
         data['description'] = form.get('description')
         data['owner'] = dict(
@@ -160,7 +160,7 @@ class FormApiV1(ApiV1Mixin, Form):
         data['status'] = form['status']
         data['modified'] = form['modified']
         data['created'] = form['created']
-        data['links'] = dict(self=dict(href=URL('form_api', form['_id'])),
+        data['links'] = dict(api=dict(href=URL('form_api', form['_id'])),
                              display=dict(href=URL('form', form['_id'])))
         data['orders'] = dict(
             count=self.get_order_count(form),
@@ -178,7 +178,7 @@ class FormLogs(RequestHandler):
         self.check_admin()
         form = self.get_entity(iuid, doctype=constants.FORM)
         self.render('logs.html',
-                    title=u"Logs for form'{0}'".format(form['title']),
+                    title=u"Logs for form '{0}'".format(form['title']),
                     entity=form,
                     logs=self.get_logs(form['_id']))
 
@@ -475,22 +475,14 @@ class FormOrders(RequestHandler):
         self.check_staff()
         form = self.get_entity(iuid, doctype=constants.FORM)
         view = self.db.view('order/form',
-                            startkey=[iuid],
-                            endkey=[iuid, constants.CEILING])
-        page = self.get_page(view=view)
-        view = self.db.view('order/form',
                             reduce=False,
                             include_docs=True,
                             descending=True,
                             startkey=[iuid, constants.CEILING],
-                            endkey=[iuid],
-                            skip=page['start'],
-                            limit=page['size'])
+                            endkey=[iuid])
         orders = [r.doc for r in view]
-        account_names = self.get_account_names([o['owner'] for o in orders])
+        account_names = self.get_account_names()
         self.render('form_orders.html',
                     form=form,
                     orders=orders,
-                    account_names=account_names,
-                    params=dict(),
-                    page=page)
+                    account_names=account_names)

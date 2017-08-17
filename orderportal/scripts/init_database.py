@@ -8,14 +8,15 @@ from __future__ import print_function, absolute_import
 
 import sys
 
+import couchdb
 import yaml
 
 from orderportal import constants
 from orderportal import settings
 from orderportal import utils
+from orderportal import admin
 from orderportal.scripts.dump import undump
 from orderportal.scripts.load_designs import load_designs
-from orderportal.scripts.load_texts import load_texts
 
 
 def get_args():
@@ -23,7 +24,7 @@ def get_args():
         'Initialize the database, deleting all old data,'
         ' optionally load from dump file.')
     parser.add_option("-L", "--load",
-                      action='store', dest='FILE', default='dump.tar.gz',
+                      action='store', dest='FILE', default=None,
                       metavar="FILE", help="filepath of dump file to load")
     return parser.parse_args()
 
@@ -41,12 +42,48 @@ def init_database(dumpfilepath=None):
     if dumpfilepath:
         dumpfilepath = utils.expand_filepath(dumpfilepath)
         try:
+            print('reading dump file...')
             undump(db, dumpfilepath)
         except IOError:
             print('Warning: could not load', dumpfilepath)
     else:
         print('no dump file loaded')
-    load_texts(db, settings['INITIAL_TEXTS_FILEPATH'], overwrite=False)
+    # Load initial order messages from file if missing in db
+    try:
+        db['order_messages']
+    except couchdb.ResourceNotFound:
+        try:
+            filepath = settings['INITIAL_ORDER_MESSAGES_FILEPATH']
+        except KeyError:
+            print('Warning: no initial order messages')
+        else:
+            try:
+                with open(utils.expand_filepath(filepath)) as infile:
+                      messages = yaml.safe_load(infile)
+            except IOError:
+                print('Warning: could not load', filepath)
+                messages = dict()
+            messages['_id'] = 'order_messages'
+            messages[constants.DOCTYPE] = constants.META
+            db.save(messages)
+    # Load texts from the init text file only if missing id db
+    filepath = settings.get('INITIAL_TEXTS_FILEPATH')
+    if filepath:
+        print('loading missing texts from', filepath)
+        try:
+            with open(utils.expand_filepath(filepath)) as infile:
+                texts = yaml.safe_load(infile)
+        except IOError:
+            print('Warning: could not load', filepath)
+            texts = dict()
+    else:
+        texts = dict()
+    for name in constants.TEXTS:
+        if len(list(db.view('text/name', key=name))) == 0:
+            with admin.TextSaver(db=db) as saver:
+                saver['name'] = name
+                saver['text'] = texts.get(name, '')
+            
 
 def wipeout_database(db):
     """Wipe out the contents of the database.

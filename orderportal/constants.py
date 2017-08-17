@@ -1,4 +1,4 @@
-" OrderPortal: Various constants."
+"Various constants."
 
 from __future__ import print_function, absolute_import
 
@@ -16,6 +16,9 @@ VERSION_RX = re.compile(r'\d+\.\d+\.\d+')
 HTML_MIME = 'text/html'
 JSON_MIME = 'application/json'
 CSV_MIME  = 'text/csv'
+ZIP_MIME  = 'application/zip'
+TEXT_MIME = 'text/plain'
+BIN_MIME  = 'application/octet-stream'
 
 # CouchDB
 # For view ranges: CouchDB uses the Unicode Collation Algorithm,
@@ -39,6 +42,10 @@ LOG     = 'log'
 META    = 'meta'
 ENTITIES = frozenset([ACCOUNT, GROUP, FORM, ORDER, INFO, FILE, MESSAGE])
 
+# System attachments to order
+SYSTEM = 'system'
+SYSTEM_REPORT = 'system_report'
+
 # Field types
 STRING  = 'string'
 INT     = 'int'
@@ -57,6 +64,17 @@ TYPES = [STRING, INT, FLOAT, BOOLEAN, URL, SELECT, MULTISELECT,
          TEXT, DATE, TABLE, FILE, GROUP]
 TYPE_LABELS = {INT: 'integer'}
 TYPE_HTML = {STRING: 'text', INT: 'number'}
+
+# Texts for use in web site
+TEXTS = dict(header='Header on portal home page.',
+             register='Registration page.',
+             registered='Page after registration.',
+             reset='Password reset page.',
+             password='Password setting page.',
+             help_datatypes='Page explaining available data types.',
+             general='General information on portal home page.',
+             contact='Contact page.',
+             about='About page.')
 
 # Boolean string values
 TRUE  = frozenset(['true', 'yes', 't', 'y', '1'])
@@ -78,6 +96,7 @@ PENDING  = 'pending'
 ENABLED  = 'enabled'
 DISABLED = 'disabled'
 ACCOUNT_STATUSES = [PENDING, ENABLED, DISABLED]
+RESET    = 'reset'
 
 # Account role
 USER  = 'user'

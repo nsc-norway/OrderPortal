@@ -1,4 +1,4 @@
-"Create an admin account in the database."
+"Create an admin account."
 
 from __future__ import print_function, absolute_import
 
@@ -12,7 +12,7 @@ from orderportal.account import AccountSaver
 
 def get_args():
     parser = utils.get_command_line_parser(description=
-        'Create a new admin account account.')
+        'Create a new admin account.')
     return parser.parse_args()
 
 def create_admin(email, password, first_name, last_name, university):
@@ -40,6 +40,13 @@ if __name__ == '__main__':
     password = getpass.getpass('Password > ')
     if not password:
         sys.exit('no password provided')
+    try:
+        utils.check_password(password)
+    except ValueError, msg:
+        sys.exit(str(msg))
+    again_password = getpass.getpass('Password again > ')
+    if password != again_password:
+        sys.exit('passwords do not match')
     first_name = raw_input('First name > ') or 'first'
     last_name = raw_input('Last name > ') or 'last'
     university = raw_input('University > ') or 'university'
