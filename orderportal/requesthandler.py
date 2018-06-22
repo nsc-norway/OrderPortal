@@ -3,8 +3,8 @@
 from __future__ import print_function, absolute_import
 
 import base64
+import json
 import logging
-import socket
 import traceback
 import urllib
 
@@ -97,12 +97,12 @@ class RequestHandler(tornado.web.RequestHandler):
     def set_message_flash(self, message):
         "Set message flash cookie."
         if message:
-            self.set_flash('message', message)
+            self.set_flash('message', str(message))
 
     def set_error_flash(self, message):
         "Set error flash cookie message."
         if message:
-            self.set_flash('error', message)
+            self.set_flash('error', str(message))
 
     def set_flash(self, name, message):
         message = message.replace(' ', '_')
@@ -207,6 +207,11 @@ class RequestHandler(tornado.web.RequestHandler):
         if not self.is_staff():
             raise tornado.web.HTTPError(
                 403, reason="Role 'admin' or 'staff' is required")
+
+    def check_login(self):
+        "Check if logged in."
+        if not self.current_user:
+            raise tornado.web.HTTPError(403, reason='Must be logged in.')
 
     def get_admins(self):
         "Get the list of enabled admin accounts."
@@ -427,3 +432,15 @@ class ApiV1Mixin(object):
         "Change _id to iuid and remove _id."
         doc['iuid'] = doc.pop('_id')
         del doc['_rev']
+
+    def get_json_body(self):
+        "Return the body of the request interpreted as JSON."
+        content_type = self.request.headers.get('Content-Type', '')
+        if content_type.startswith(constants.JSON_MIME):
+            return json.loads(self.request.body)
+        else:
+            return {}
+
+    def check_xsrf_cookie(self):
+        "Do not check for XSRF cookie when API."
+        pass

@@ -2,17 +2,24 @@
 
 {% extends "base.html" %}
 
-{% block head_title %}Account messages admin{% end %}
-{% block body_title %}Account messages admin{% end %}
+{% block head_title %}Account messages{% end %}
+
+{% block body_title %}
+Account messages
+<small>Templates for messages for account status changes.</small>
+{% end %}
 
 {% block main_content %}
 <div class="well">
   <p>
-    Templates for messages sent when an account is set to a certain status.
+    The account messages are defined in the YAML file 
+    <code>{{ settings.get('ACCOUNT_MESSAGES_FILEPATH') }}</code> 
+    which is read on startup of the OrderPortal server.
   </p>
   <p>
-    Variables denoted <code>{name}</code> are replaced by their
-    corresponding values when the message is prepared.
+    To change the messages, the YAML file must be edited and the
+    OrderPortal server restarted. Only the sysadmin for the server
+    machine can do this.
   </p>
   <table class="table">
     <tr>
@@ -59,7 +66,7 @@
   </tr>
   {% set statuses = constants.ACCOUNT_STATUSES + [constants.RESET] %}
   {% for status in  statuses %}
-  {% set message = account_messages.get(status, dict()) %}
+  {% set message = settings['ACCOUNT_MESSAGES'].get(status, dict()) %}
   <tr>
     <td>{% module Icon(status, label=True) %}</td>
     <td>{{ ', '.join(message.get('recipients', [])) or '-' }}</td>

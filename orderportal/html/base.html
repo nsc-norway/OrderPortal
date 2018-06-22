@@ -133,28 +133,22 @@
 	      </a>
               <ul class="dropdown-menu">
 		<li>
-		  <a href="{{ reverse_url('search_fields') }}">Search fields</a>
-		</li>
-		<li>
 		  <a href="{{ reverse_url('global_modes') }}">Global modes</a>
 		</li>
 		<li>
-		  <a href="{{ reverse_url('statuses') }}">Statuses</a>
+		  <a href="{{ reverse_url('settings') }}">Settings</a>
 		</li>
 		<li>
-		  <a href="{{ reverse_url('settings') }}">Settings</a>
+		  <a href="{{ reverse_url('texts') }}">Texts</a>
+		</li>
+		<li>
+		  <a href="{{ reverse_url('order_statuses') }}">Order statuses</a>
 		</li>
 		<li>
 		  <a href="{{ reverse_url('admin_order_messages') }}">Order messages</a>
 		</li>
 		<li>
 		  <a href="{{ reverse_url('admin_account_messages') }}">Account messages</a>
-		</li>
-		<li>
-		  <a href="{{ reverse_url('statistics') }}">Statistics</a>
-		</li>
-		<li>
-		  <a href="{{ reverse_url('texts') }}">Texts</a>
 		</li>
 		<li>
 		  <a href="{{ reverse_url('software') }}">Software info</a>
@@ -200,6 +194,7 @@
 	      </li>
 	      {% end %} {# if current_user #}
 	      {% block search_field %}
+	      {% if current_user %}
 	      <li>
 		<form action="{{ reverse_url('search') }}"
 		      role="form"
@@ -208,11 +203,12 @@
 		  <div class="form-group has-feedback">
 		    <input type="search" id="term" name="term"
 			   class="form-control"
-			   placeholder="Search">
+			   placeholder="Search orders">
 		    <span class="glyphicon glyphicon-search form-control-feedback"></span>
 		  </div>
 		</form>
 	      </li>
+	      {% end %} {# if current_user #}
 	      {% end %} {# block search_field #}
 	    </ul>
 	  </div>
@@ -292,9 +288,11 @@
 	  </a>
 	</div>
         <div class="col-md-8 text-center">
-          Cookie policy: 
           {% if current_user %}
-          A cookie is used to handle your login session.
+          GDPR information: See
+          <a href="{{ reverse_url('account', current_user['email']) }}">
+            your account page</a>.
+          A cookie is used solely to handle your login session.
           {% else %}
           Cookies are <b>not</b> used for anonymous users.
           {% end %}

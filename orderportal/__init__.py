@@ -1,5 +1,5 @@
-"""OrderPortal: A portal for orders (a.k.a. requests, project applications)
-to a facility from its users.
+"""OrderPortal: A portal for orders to a facility from its users.
+An order can be a project application, a request, a report, etc.
 """
 
 from __future__ import print_function, absolute_import
@@ -7,20 +7,17 @@ from __future__ import print_function, absolute_import
 import os
 
 
-__version__ = '3.3.11'
+__version__ = '3.5.5'
 
 # Default settings, may be changed in a settings YAML file.
 settings = dict(
-    ROOT=os.path.dirname(__file__),
+    ROOT_DIR=os.path.dirname(__file__),
     BASE_URL='http://localhost/',
     TORNADO_DEBUG=False,
     LOGGING_DEBUG=False,
     LOGGING_FORMAT='%(levelname)s [%(asctime)s] %(message)s',
-    PROCESSORS=[],
-    SITE_DIR='{ROOT}/generic',
-    SITE_NAME='OrderPortal',
-    SITE_PERSONAL_DATA_POLICY='The data will be used only for activities directly related to this site.',
-    DB_SERVER='http://localhost:5984/',
+    DATABASE_SERVER='http://localhost:5984/',
+    DATABASE_NAME='orderportal',
     COUCHDB_HOME='http://couchdb.apache.org/',
     BOOTSTRAP_HOME='http://getbootstrap.com/',
     BOOTSTRAP_CSS_URL='https://maxcdn.bootstrapcdn.com/bootstrap/3.3.6/css/bootstrap.min.css',
@@ -36,6 +33,10 @@ settings = dict(
     DATATABLES_CSS_URL='https://cdn.datatables.net/1.10.11/css/dataTables.bootstrap.min.css',
     DATATABLES_JS_URL='https://cdn.datatables.net/1.10.11/js/jquery.dataTables.min.js',
     DATATABLES_BOOTSTRAP_JS_URL='https://cdn.datatables.net/1.10.11/js/dataTables.bootstrap.min.js',
+    DOCUMENTATION_URL='https://github.com/pekrau/OrderPortal/wiki',
+    MARKDOWN_URL='http://daringfireball.net/projects/markdown/syntax',
+    SITE_NAME='OrderPortal',
+    SITE_PERSONAL_DATA_POLICY='The data will be used only for activities directly related to this site.',
     MIN_PASSWORD_LENGTH=8,
     LOGIN_MAX_AGE_DAYS=14,
     LOGIN_MAX_FAILURES=6,
@@ -44,30 +45,28 @@ settings = dict(
     DISPLAY_ORDERS_MOST_RECENT=500,
     DISPLAY_MAX_PENDING_ACCOUNTS=10,
     DISPLAY_DEFAULT_MAX_LOG=20,
+    DISPLAY_NEWS=True,
     DISPLAY_MAX_NEWS=4,
-    ORDER_STATUSES_FILEPATH='{SITE_DIR}/order_statuses.yaml',
-    ORDER_TRANSITIONS_FILEPATH='{SITE_DIR}/order_transitions.yaml',
+    DISPLAY_EVENTS=True,
     ORDER_USER_TAGS=True,
+    ORDER_LINKS=True,
     ORDER_TABLE_NEW_ROWS=4,
     ORDERS_LIST_TAGS=True,
     ORDERS_LIST_FIELDS=[],
     ORDERS_LIST_STATUSES=[],
-    # XXX To be removed
-    ORDER_MESSAGES_FILEPATH='{SITE_DIR}/order_messages.yaml',
+    ORDERS_SEARCH_FIELDS=[],
     ACCOUNT_INVOICE_INFO=True,
     ACCOUNT_FUNDER_INFO=True,
     ACCOUNT_FUNDER_INFO_GENDER=True,
     ACCOUNT_FUNDER_INFO_GROUP_SIZE=True,
     ACCOUNT_FUNDER_INFO_SUBJECT=True,
-    ACCOUNT_CONTACT_INFO=True,
-    ACCOUNT_PI=True,
+    SITE_DIR='{ROOT_DIR}/site',
+    ACCOUNT_MESSAGES_FILEPATH='{SITE_DIR}/account_messages.yaml',
+    ORDER_STATUSES_FILEPATH='{SITE_DIR}/order_statuses.yaml',
+    ORDER_TRANSITIONS_FILEPATH='{SITE_DIR}/order_transitions.yaml',
+    ORDER_MESSAGES_FILEPATH='{SITE_DIR}/order_messages.yaml',
     UNIVERSITIES_FILEPATH='{SITE_DIR}/swedish_universities.yaml',
     COUNTRY_CODES_FILEPATH='{SITE_DIR}/country_codes.yaml',
-    SUBJECT_TERMS_FILEPATH='{SITE_DIR}/subjects.yaml',
-    DOCUMENTATION_URL='https://github.com/pekrau/OrderPortal/wiki',
-    MARKDOWN_URL='http://daringfireball.net/projects/markdown/syntax',
-    # For database initialization only; ignored after that.
-    INITIAL_TEXTS_FILEPATH='{SITE_DIR}/initial_texts.yaml',
-    INITIAL_ORDER_MESSAGES_FILEPATH='{SITE_DIR}/initial_order_messages.yaml',
-    INITIAL_ACCOUNT_MESSAGES_FILEPATH='{SITE_DIR}/initial_account_messages.yaml',
+    SUBJECT_TERMS_FILEPATH='{SITE_DIR}/subject_terms.yaml',
+    GDPR_INFO_URL=None,
     )

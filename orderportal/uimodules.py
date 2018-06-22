@@ -164,6 +164,8 @@ class NoneStr(tornado.web.UIModule):
     def render(self, value, undef=''):
         if value is None:
             return undef
+        elif isinstance(value, basestring):
+            return utils.to_utf8(value)
         else:
             return str(value)
 
@@ -177,3 +179,15 @@ class Version(tornado.web.UIModule):
             return ''
         else:
             return "(version %s)" % version
+
+
+class ShortenedPre(tornado.web.UIModule):
+    "Shorten lines to output within <pre> tags."
+
+    def render(self, lines, maxlength=16):
+        lines = lines or []
+        for pos, line in enumerate(lines):
+            if len(line) > maxlength:
+                line = line[:maxlength] + '...'
+                lines[pos] = line
+        return "<pre>%s</pre>" % '\n'.join(lines)

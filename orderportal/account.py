@@ -207,7 +207,7 @@ class AccountsCsv(Accounts):
         self.set_filter()
         accounts = self.get_accounts()
         csvfile = StringIO()
-        writer = csv.writer(csvfile)
+        writer = csv.writer(csvfile, quoting=csv.QUOTE_NONNUMERIC)
         safe = utils.csv_safe_row
         writer.writerow(safe((settings['SITE_NAME'], utils.timestamp())))
         writer.writerow(safe(('Email', 'Last name', 'First name', 'Role',
@@ -733,32 +733,35 @@ class Login(RequestHandler):
             view = self.db.view('log/login_failure',
                                 startkey=[account['_id'], utils.timestamp(-1)],
                                 endkey=[account['_id'], utils.timestamp()])
+            # Disable account if too many recent login failures.
             if len(list(view)) > settings['LOGIN_MAX_FAILURES']:
                 logging.warning("account %s has been disabled due to"
                                 " too many login failures", account['email'])
                 with AccountSaver(doc=account, rqh=self) as saver:
                     saver['status'] = constants.DISABLED
                     saver.erase_password()
-                msg = 'Too many failed login attempts: Your account has been' \
-                      ' disabled. You must contact the site administrators.'
+                msg = "Too many failed login attempts: Your account has been" \
+                      " disabled. Contact the site administrators %s." % \
+                      settings.get('SITE_SUPPORT_EMAIL', '')
                 # Prepare message sent by cron job script 'script/messenger.py'
                 try:
-                    template = self.db['account_messages']['disabled']
+                    template = settings['ACCOUNT_MESSAGES'][constants.DISABLED]
                 except KeyError:
                     pass
                 else:
                     with MessageSaver(rqh=self) as saver:
-                        saver.set_params()
-                        saver.set_template(template)
-                        saver['recipients'] = [account['email']]
+                        saver.create(template)
+                        # Recipient is hardwired here.
+                        saver.send([account['email']])
             self.see_other('home', error=msg)
             return
         try:
             if not account.get('status') == constants.ENABLED:
                 raise ValueError
         except ValueError:
-            self.see_other('home', error='Account is disabled.'
-                           ' Contact the site admin.')
+            msg = "Account is disabled. Contact the site administrators %s." % \
+                  settings.get('SITE_SUPPORT_EMAIL', '')
+            self.see_other('home', error=msg)
             return
         if not self.global_modes['allow_login'] \
            and account['role'] != constants.ADMIN:
@@ -816,21 +819,21 @@ class Reset(RequestHandler):
                 saver.reset_password()
             # Prepare message sent by cron job script 'script/messenger.py'
             try:
-                template = self.db['account_messages']['reset']
+                template = settings['ACCOUNT_MESSAGES'][constants.RESET]
             except KeyError:
                 pass
             else:
                 with MessageSaver(rqh=self) as saver:
-                    saver.set_params(
-                        account=account['email'],
-                        url=URL('password'),
-                        password_url=URL('password'),
-                        password_code_url=URL('password',
-                                              email=account['email'],
-                                              code=account['code']),
-                        code=account['code'])
-                    saver.set_template(template)
-                    saver['recipients'] = [account['email']]
+                    saver.create(template,
+                                 account=account['email'],
+                                 url=URL('password'),
+                                 password_url=URL('password'),
+                                 password_code_url=URL('password',
+                                                       email=account['email'],
+                                                       code=account['code']),
+                                 code=account['code'])
+                    # Recipient is hardwired here.
+                    saver.send([account['email']])
             if self.current_user:
                 if not self.is_admin():
                     # Log out the user
@@ -969,19 +972,19 @@ class Register(RequestHandler):
                     get(key) or ''
             self.see_other('register', error=str(msg), **kwargs)
             return
-        # Prepare message sent by cron job script 'script/messenger.py'
         try:
-            template = self.db['account_messages']['pending']
+            template = settings['ACCOUNT_MESSAGES'][constants.PENDING]
         except KeyError:
             pass
         else:
             account = saver.doc
             with MessageSaver(rqh=self) as saver:
-                saver.set_params(
-                    account=account['email'],
-                    url=self.absolute_reverse_url('account', account['email']))
-                saver.set_template(template)
-                saver['recipients'] = [a['email'] for a in self.get_admins()]
+                saver.create(template,
+                             account=account['email'],
+                             url=self.absolute_reverse_url(
+                                 'account', account['email']))
+                # Recipients are hardwired here.
+                saver.send([a['email'] for a in self.get_admins()])
         self.see_other('registered')
 
 
@@ -1008,21 +1011,21 @@ class AccountEnable(RequestHandler):
             saver.reset_password()
         # Prepare message sent by cron job script 'script/messenger.py'
         try:
-            template = self.db['account_messages']['enabled']
+            template = settings['ACCOUNT_MESSAGES'][constants.ENABLED]
         except KeyError:
             pass
         else:
             with MessageSaver(rqh=self) as saver:
-                saver.set_params(
-                    account=account['email'],
-                    password_url=self.absolute_reverse_url('password'),
-                    password_code_url=self.absolute_reverse_url(
-                        'password',
-                        email=account['email'],
-                        code=account['code']),
-                    code=account['code'])
-                saver.set_template(template)
-                saver['recipients'] = [account['email']]
+                saver.create(template,
+                             account=account['email'],
+                             password_url=self.absolute_reverse_url('password'),
+                             password_code_url=self.absolute_reverse_url(
+                                 'password',
+                                 email=account['email'],
+                                 code=account['code']),
+                             code=account['code'])
+                # Recipient is hardwired here.
+                saver.send([account['email']])
         self.see_other('account', account['email'])
 
 

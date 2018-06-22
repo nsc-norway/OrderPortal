@@ -9,7 +9,6 @@ import logging
 import mimetypes
 import optparse
 import os
-import socket
 import sys
 import time
 import traceback
@@ -25,58 +24,34 @@ import yaml
 import orderportal
 from . import constants
 from . import settings
-from .processors.baseprocessor import BaseProcessor
 
 
 def get_command_line_parser(usage='usage: %prog [options]', description=None):
     "Get the base command line argument parser."
-    # optparse is used (rather than argparse) since
-    # this code must be possible to run under Python 2.6
+    # optparse is used (rather than argparse) due to Python 2.6
     parser = optparse.OptionParser(usage=usage, description=description)
     parser.add_option('-s', '--settings',
-                      action='store', dest='settings', default=None,
-                      metavar="FILE", help="filename of settings YAML file")
+                      action='store', dest='settings',
+                      default='{ROOT_DIR}/settings.yaml',
+                      metavar="FILE", help="filepath of settings YAML file")
     parser.add_option('-p', '--pidfile',
                       action='store', dest='pidfile', default=None,
-                      metavar="FILE", help="filename of file containing PID")
+                      metavar="FILE", help="filepath of file to contain PID")
     parser.add_option('-f', '--force',
                       action="store_true", dest="force", default=False,
                       help='force action, rather than ask for confirmation')
     return parser
 
-def load_settings(filepath=None):
-    """Load and return the settings from the file path given by
-    1) the argument to this procedure,
-    2) the environment variable ORDERPORTAL_SETTINGS,
-    3) the first existing file in a predefined list of filepaths.
-    Raise ValueError if no settings file was given.
+def load_settings(filepath):
+    """Load and return the settings from the given file path.
     Raise IOError if settings file could not be read.
     Raise KeyError if a settings variable is missing.
     Raise ValueError if a settings variable value is invalid.
     """
-    if not filepath:
-        filepath = os.environ.get('ORDERPORTAL_SETTINGS')
-    if not filepath:
-        hostname = socket.gethostname().split('.')[0]
-        basedir = os.path.dirname(__file__)
-        for filepath in [os.path.join(basedir, "{0}.yaml".format(hostname)),
-                         os.path.join(basedir, 'default.yaml'),
-                         os.path.join(basedir, 'settings.yaml')]:
-            if os.path.exists(filepath) and os.path.isfile(filepath):
-                break
-        else:
-            raise ValueError('No settings file specified.')
     # Read the settings file, updating the defaults
-    with open(filepath) as infile:
+    with open(expand_filepath(filepath)) as infile:
         settings.update(yaml.safe_load(infile))
     settings['SETTINGS_FILEPATH'] = filepath
-    # Set current working dir to be ROOT while reading the files
-    orig_dir = os.getcwd()
-    os.chdir(settings['ROOT'])
-    # Expand environment variables (ROOT, SITE_DIR) once and for all
-    for key, value in settings.items():
-        if isinstance(value, (str, unicode)):
-            settings[key] = expand_filepath(value)
     # Set logging state
     if settings.get('LOGGING_DEBUG'):
         kwargs = dict(level=logging.DEBUG)
@@ -96,40 +71,36 @@ def load_settings(filepath=None):
         pass
     logging.basicConfig(**kwargs)
     logging.info("OrderPortal version %s", orderportal.__version__)
-    logging.info("settings from %s", settings['SETTINGS_FILEPATH'])
-    logging.info("logging debug %s", settings['LOGGING_DEBUG'])
-    logging.info("tornado debug %s", settings['TORNADO_DEBUG'])
+    logging.info("ROOT_DIR: %s", settings['ROOT_DIR'])
+    logging.info("SITE_DIR: %s", settings['SITE_DIR'])
+    logging.info("settings: %s", settings['SETTINGS_FILEPATH'])
+    logging.info("logging debug: %s", settings['LOGGING_DEBUG'])
+    logging.info("tornado debug: %s", settings['TORNADO_DEBUG'])
     # Check settings
-    for key in ['BASE_URL', 'DB_SERVER', 'COOKIE_SECRET', 'DATABASE']:
+    for key in ['BASE_URL','DATABASE_SERVER','DATABASE_NAME','COOKIE_SECRET']:
         if key not in settings:
             raise KeyError("No settings['{0}'] item.".format(key))
         if not settings[key]:
             raise ValueError("settings['{0}'] has invalid value.".format(key))
+    logging.info("CouchDB database name: %s", settings['DATABASE_NAME'])
     if len(settings.get('COOKIE_SECRET', '')) < 10:
         raise ValueError("settings['COOKIE_SECRET'] not set, or too short.")
-    # Load processor modules and the classes in them
-    paths = settings.get('PROCESSORS', [])
-    settings['PROCESSORS'] = {}
-    for path in paths:
-        try:
-            fromlist = '.'.join(path.split('.')[:-1])
-            module = __import__(path, fromlist=fromlist)
-        except:
-            logging.error("could not import processor module %s\n%s",
-                          path,
-                          traceback.format_exc(limit=20))
-        else:
-            for name in dir(module):
-                entity = getattr(module, name)
-                if isinstance(entity, type) and \
-                   issubclass(entity, BaseProcessor) and \
-                   entity != BaseProcessor:
-                    name = entity.__module__ + '.' + entity.__name__
-                    settings['PROCESSORS'][name] = entity
-                    logging.debug("loaded processor %s", name)
-    # Read order state definitions and transitions
-    logging.debug("Order statuses from %s", settings['ORDER_STATUSES_FILEPATH'])
-    with open(settings['ORDER_STATUSES_FILEPATH']) as infile:
+    # Read account messages YAML file.
+    logging.info("account messages: %s", settings['ACCOUNT_MESSAGES_FILEPATH'])
+    with open(expand_filepath(settings['ACCOUNT_MESSAGES_FILEPATH'])) as infile:
+        settings['ACCOUNT_MESSAGES'] = yaml.safe_load(infile)
+    # Set recipients, which are hardwired into the source code.
+    # Also checks for missing message for a status.
+    try:
+        settings['ACCOUNT_MESSAGES'][constants.PENDING]['recipients'] = ['admin']
+        settings['ACCOUNT_MESSAGES'][constants.ENABLED]['recipients'] = ['account']
+        settings['ACCOUNT_MESSAGES'][constants.DISABLED]['recipients'] = ['account']
+        settings['ACCOUNT_MESSAGES'][constants.RESET]['recipients'] = ['account']
+    except KeyError:
+        raise ValueError('Account messages file: missing message for status')
+    # Read order statuses definitions YAML file.
+    logging.info("order statuses: %s", settings['ORDER_STATUSES_FILEPATH'])
+    with open(expand_filepath(settings['ORDER_STATUSES_FILEPATH'])) as infile:
         settings['ORDER_STATUSES'] = yaml.safe_load(infile)
     settings['ORDER_STATUSES_LOOKUP'] = lookup = dict()
     initial = None
@@ -142,49 +113,48 @@ def load_settings(filepath=None):
     if not initial:
         raise ValueError('No initial order status defined.')
     settings['ORDER_STATUS_INITIAL'] = initial
-    logging.debug("Order transitions from %s", 
-                  settings['ORDER_TRANSITIONS_FILEPATH'])
-    with open(settings['ORDER_TRANSITIONS_FILEPATH']) as infile:
+    # Read order status transition definiton YAML file.
+    logging.info("order transitions: %s", 
+                 settings['ORDER_TRANSITIONS_FILEPATH'])
+    with open(expand_filepath(settings['ORDER_TRANSITIONS_FILEPATH'])) as infile:
         settings['ORDER_TRANSITIONS'] = yaml.safe_load(infile)
-    # Read universities lookup
-    try:
-        filepath = settings['UNIVERSITIES_FILEPATH']
-        if not filepath: raise KeyError
-    except KeyError:
+    # Read order messages YAML file.
+    logging.info("order messages: %s", settings['ORDER_MESSAGES_FILEPATH'])
+    with open(expand_filepath(settings['ORDER_MESSAGES_FILEPATH'])) as infile:
+        settings['ORDER_MESSAGES'] = yaml.safe_load(infile)
+    # Read universities YAML file.
+    filepath = settings.get('UNIVERSITIES_FILEPATH')
+    if not filepath:
         settings['UNIVERSITIES'] = dict()
     else:
-        logging.debug("Universities lookup from %s", filepath)
-        with open(filepath) as infile:
+        logging.info("universities lookup: %s", filepath)
+        with open(expand_filepath(filepath)) as infile:
             unis = yaml.safe_load(infile)
         unis = unis.items()
         unis.sort(key=lambda i: (i[1].get('rank'), i[0]))
         settings['UNIVERSITIES'] = collections.OrderedDict(unis)
-    # Read country codes
-    try:
-        filepath = settings['COUNTRY_CODES_FILEPATH']
-        if not filepath: raise KeyError
-    except KeyError:
+    # Read country codes YAML file
+    filepath = settings.get('COUNTRY_CODES_FILEPATH')
+    if not filepath:
         settings['COUNTRIES'] = []
     else:
-        logging.debug("Country codes from %s", filepath)
-        with open(filepath) as infile:
+        logging.info("country codes: %s", filepath)
+        with open(expand_filepath(filepath)) as infile:
             settings['COUNTRIES'] = yaml.safe_load(infile)
         settings['COUNTRIES_LOOKUP'] = dict([(c['code'], c['name'])
                                              for c in settings['COUNTRIES']])
-    # Read subject terms
-    try:
-        filepath = settings['SUBJECT_TERMS_FILEPATH']
-        if not filepath: raise KeyError
-    except KeyError:
+    # Read subject terms YAML file.
+    filepath = settings.get('SUBJECT_TERMS_FILEPATH')
+    if not filepath:
         settings['subjects'] = []
     else:
-        logging.debug("Subject terms from %s", filepath)
-        with open(filepath) as infile:
+        logging.info("subject terms: %s", filepath)
+        with open(expand_filepath(filepath)) as infile:
             settings['subjects'] = yaml.safe_load(infile)
     settings['subjects_lookup'] = dict([(s['code'], s['term'])
                                         for s in settings['subjects']])
-    # Settings computable from others
-    settings['DB_SERVER_VERSION'] = get_dbserver().version()
+    # Settings computable from others.
+    settings['DATABASE_SERVER_VERSION'] = get_dbserver().version()
     if 'PORT' not in settings:
         parts = urlparse.urlparse(settings['BASE_URL'])
         items = parts.netloc.split(':')
@@ -196,14 +166,12 @@ def load_settings(filepath=None):
             settings['PORT'] =  443
         else:
             raise ValueError('Could not determine port from BASE_URL.')
-    # Set back current working dir
-    os.chdir(orig_dir)
 
 def terminology(word):
     "Return the display term for the given word. Use itself by default."
     try:
         istitle = word.istitle()
-        word = settings['TERMS'][word.lower()]
+        word = settings['TERMINOLOGY'][word.lower()]
     except KeyError:
         pass
     else:
@@ -211,34 +179,28 @@ def terminology(word):
     return word
 
 def expand_filepath(filepath):
-    "Expand environment variables (ROOT and SITE_DIR) in filepaths."
-    filepath = os.path.expandvars(filepath)
-    old = None
-    while filepath != old:
-        old = filepath
-        try:
-            filepath = filepath.replace('{SITE_DIR}', settings['SITE_DIR'])
-        except KeyError:
-            pass
-        filepath = filepath.replace('{ROOT}', settings['ROOT'])
+    "Expand variables (ROOT_DIR and SITE_DIR) in filepaths."
+    filepath = filepath.replace('{SITE_DIR}', settings['SITE_DIR'])
+    filepath = filepath.replace('{ROOT_DIR}', settings['ROOT_DIR'])
+    if not os.path.isabs(filepath):
+        filepath = os.path.join(settings['ROOT_DIR'], filepath)
     return filepath
 
 def get_dbserver():
-    return couchdb.Server(settings['DB_SERVER'])
+    server = couchdb.Server(settings['DATABASE_SERVER'])
+    if settings.get('DATABASE_ACCOUNT') and settings.get('DATABASE_PASSWORD'):
+        server.resource.credentials = (settings.get('DATABASE_ACCOUNT'),
+                                       settings.get('DATABASE_PASSWORD'))
+    return server
 
-def get_db(create=False):
-    """Return the handle for the CouchDB database.
-    If 'create' is True, then create the database if it does not exist.
-    """
+def get_db():
+    "Return the handle for the CouchDB database."
     server = get_dbserver()
-    name = settings['DATABASE']
     try:
-        return server[name]
+        return server[settings['DATABASE_NAME']]
     except couchdb.http.ResourceNotFound:
-        if create:
-            return server.create(name)
-        else:
-            raise KeyError("CouchDB database '%s' does not exist." % name)
+        raise KeyError("CouchDB database '%s' does not exist." % 
+                       settings['DATABASE_NAME'])
 
 def get_iuid():
     "Return a unique instance identifier."
@@ -310,6 +272,7 @@ def convert(type, value):
 
 def csv_safe_row(row):
     """Remove any beginning character '=-+@' from string values to output.
+    Also convert to UTF-8.
     See http://georgemauer.net/2017/10/07/csv-injection.html
     """
     row = list(row)
@@ -317,7 +280,7 @@ def csv_safe_row(row):
         if not isinstance(value, basestring): continue
         while len(value) and value[0] in '=-+@':
             value = value[1:]
-        row[pos] = value
+        row[pos] = to_utf8(value)
     return row
 
 def get_json(id, type):
@@ -346,10 +309,6 @@ def get_account_name(account=None, value=None):
     else:
         name = first_name
     return name
-
-def absolute_path(filename):
-    "Return the absolute path given the current directory."
-    return os.path.join(settings['ROOT'], filename)
 
 def check_password(password):
     """Check that the password is long and complex enough.

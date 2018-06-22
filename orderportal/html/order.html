@@ -152,7 +152,8 @@
 	<td colspan="2">
 	  <a href="{{ reverse_url('account', order['owner']) }}">
 	    {{ account_names.get(order['owner'], order['owner']) }}
-	  </a>
+	  </a>,
+          {{ order['owner'] }}
 	</td>
       </tr>
       {% if is_staff or settings.get('ORDER_USER_TAGS') %}
@@ -161,6 +162,17 @@
 	<td>{% module Tags(order.get('tags', [])) %}</td>
       </tr>
       {% end %} {#if is_staff or settings.get('ORDER_USER_TAGS') #}
+      {% if settings.get('ORDER_LINKS') %}
+      <tr>
+	<th>Links</th>
+	<td>
+          {% for link in order.get('links', {}).get('external', []) %}
+          <a href="{{ link['href'] }}" target="_blank">
+            {{ link['title'] }}</a><br>
+          {% end %}
+        </td>
+      </tr>
+      {% end %} {#if settings.get('ORDER_LINKS') #}
       <tr>
 	<th>Status</th>
 	<td>

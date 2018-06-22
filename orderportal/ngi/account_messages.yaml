@@ -1,5 +1,7 @@
 # Message definitions for account status events.
 
+# Recipients are not specified here; these are hard-wired in the source code.
+
 # The following parameters may be used:
 # {site}    The name of the OrderPortal site.
 # {support} Contact address.
@@ -8,7 +10,7 @@
 #     When applicable also:
 # {password_url} URL for password setting page.
 # {password_code_url} URL for password setting page, including code and email.
-# {code}    The password setting code.
+# {code}    The password setting code itself.
 
 pending:
   subject: "An account {account} in the {site} is pending approval."
@@ -20,12 +22,13 @@ pending:
 enabled:
   subject: "Your account in the {site} has been enabled."
   text: |
-    Your account {account} in the {site} has been enabled.
+    Your account {account} in the new {site} has been enabled.
+    You will now have to set a new password for your account.
 
-    However, you will first have to set your password for the account.
+    You may be asked to check the information for your account,
+    such as address and invoice information.
 
     Go to {password_code_url} to set the password.
-
     In case that link does not work, go to {password_url} and
     fill in your email address and the one-time code {code}.
 

@@ -142,27 +142,6 @@ class Software(RequestHandler):
                     versions=versions)
 
 
-class Statistics(RequestHandler):
-    "Display statistics for the database."
-
-    @tornado.web.authenticated
-    def get(self):
-        self.check_admin()
-        view = self.db.view('order/status', reduce=True)
-        try:
-            r = list(view)[0]
-        except IndexError:
-            orders = dict(count=0)
-        else:
-            orders = dict(count=r.value)
-        view = self.db.view('order/status',
-                            group_level=1,
-                            startkey=[''],
-                            endkey=[constants.CEILING])
-        orders['status'] = dict([(r.key[0], r.value) for r in view])
-        self.render('statistics.html', orders=orders)
-
-
 class Log(RequestHandler):
     "Singe log entry; JSON output."
 
@@ -194,5 +173,26 @@ class Entity(RequestHandler):
 class NoSuchEntity(RequestHandler):
     "Error message on home page."
 
-    def get(self):
+    def get(self, path=None):
+        logging.debug("No such entity: %s", path)
         self.see_other('home', error='Sorry, no such entity found.')
+
+
+class NoSuchEntityApiV1(RequestHandler):
+    "Return Not Found status code."
+
+    def get(self, path=None):
+        logging.debug("No such entity: %s", path)
+        raise tornado.web.HTTPError(404)
+
+    def post(self, path=None):
+        logging.debug("No such entity: %s", path)
+        raise tornado.web.HTTPError(404)
+
+    def put(self, path=None):
+        logging.debug("No such entity: %s", path)
+        raise tornado.web.HTTPError(404)
+
+    def check_xsrf_cookie(self):
+        "Do not check for XSRF cookie when API."
+        pass

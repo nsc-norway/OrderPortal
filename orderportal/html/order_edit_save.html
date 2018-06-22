@@ -1,5 +1,4 @@
 {# Order edit save buttons row. #}
-
 <div class="row">
   <div class="col-md-3">
     <div class="form-group">
@@ -7,7 +6,7 @@
       <button type="submit" class="btn btn-success btn-block"
 	      name="__save__" value="continue">
 	<span class="glyphicon glyphicon-floppy-disk"></span>
-	Save
+	Save and continue edit
       </button>
     </div>
   </div>
@@ -20,16 +19,4 @@
       </button>
     </div>
   </div>
-  {% if is_submittable %}
-  <div class="col-md-3">
-    <div class="form-group">
-      <label class="control-label"></label>
-      <button type="submit" class="btn btn-success btn-block"
-	      name="__save__" value="submit">
-	{% module Icon('submitted') %}
-	Save and submit
-      </button>
-    </div>
-  </div>
-  {% end %}
 </div>
